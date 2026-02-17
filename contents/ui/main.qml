@@ -2,6 +2,8 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import org.kde.plasma.plasmoid
+import org.kde.plasma.core as PlasmaCore
+import org.kde.plasma.core as PlasmaCore
 import org.kde.kirigami as Kirigami
 
 PlasmoidItem {
@@ -144,7 +146,7 @@ PlasmoidItem {
         onTriggered: fetchWeather()
     }
 
-    compactRepresentation: RowLayout {
+    Plasmoid.compactRepresentation: RowLayout {
         spacing: Kirigami.Units.smallSpacing
 
         Kirigami.Icon {
@@ -159,7 +161,7 @@ PlasmoidItem {
         }
     }
 
-    fullRepresentation: ColumnLayout {
+    Plasmoid.fullRepresentation: ColumnLayout {
         spacing: Kirigami.Units.smallSpacing
 
         ComboBox {
