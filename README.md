@@ -1,30 +1,43 @@
 # Plasma Weather City List Widget
 
-A KDE Plasma widget inspired by the XFCE weather plugin workflow, with a simple city selector and live weather from [Open-Meteo](https://open-meteo.com/).
+A KDE Plasma 6 widget inspired by xfce4-weather-plugin, redesigned with a modern weather card look and richer settings.
 
-## Features
+## What is implemented
 
-- Predefined city list with quick switching.
-- Configurable custom city (Name|Latitude|Longitude format).
-- Current temperature, weather condition, and wind speed.
-- Automatic refresh interval (configurable).
-- Plasma 6.5-compatible single-view UI (no `fullRepresentation`/`compactRepresentation` API usage).
+- City selector with built-in cities + custom cities.
+- Styled weather card UI inspired by modern weather widgets.
+- Current conditions from Open-Meteo:
+  - temperature,
+  - feels-like,
+  - humidity,
+  - wind,
+  - pressure,
+  - weather condition code/icon,
+  - today's min/max summary.
+- XFCE-like settings categories (Location, Layout, Units, Refresh).
 
-## Install locally (Plasma 6.5 safe)
+## Settings now available
 
-From this repository root:
+- **Location**
+  - primary city (`Name|Latitude|Longitude`),
+  - extra custom cities (semicolon-separated list).
+- **Layout**
+  - show/hide feels-like, humidity, wind, pressure, daily min/max.
+- **Units**
+  - temperature (°C/°F),
+  - wind (km/h, mph, m/s, kn),
+  - pressure (hPa, mmHg, inHg),
+  - clock format (system/12h/24h).
+- **Refresh**
+  - auto-refresh toggle,
+  - interval in minutes.
+
+## Install / update locally
 
 ```bash
-# 1) Remove old installed copy (if present)
 kpackagetool6 --type Plasma/Applet --remove org.example.plasma.weathercitylist || true
-
-# 2) Install this version
 kpackagetool6 --type Plasma/Applet --install .
-
-# 3) Optional: clear compiled QML cache if Plasma keeps stale code
 rm -rf ~/.cache/plasmashell/qmlcache
-
-# 4) Restart shell
 plasmashell --replace
 ```
 
@@ -32,6 +45,5 @@ Then add **City List Weather** from Plasma widgets.
 
 ## Notes
 
-- Uses Open-Meteo's free API, no API key required.
-- This is a starter port-style widget, not a full feature parity implementation of xfce4-weather-plugin yet.
-- If you still see an error mentioning `fullRepresentation`, your system is loading an older installed copy, not this repository's `contents/ui/main.qml`.
+- Data source: Open-Meteo API (no API key required).
+- This is a practical port-style implementation inspired by XFCE behavior and options.

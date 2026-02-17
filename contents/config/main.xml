@@ -6,14 +6,58 @@
     <kcfgfile name=""/>
     <group name="General">
         <entry name="selectedCity" type="String">
-            <label>Selected city identifier in the format Name|Latitude|Longitude.</label>
+            <label>Selected city in format Name|Latitude|Longitude.</label>
             <default>London|51.5072|-0.1276</default>
+        </entry>
+        <entry name="customCityList" type="String">
+            <label>Semicolon-separated custom city list, each in Name|Latitude|Longitude format.</label>
+            <default></default>
+        </entry>
+        <entry name="showFeelsLike" type="Bool">
+            <label>Show apparent temperature.</label>
+            <default>true</default>
+        </entry>
+        <entry name="showHumidity" type="Bool">
+            <label>Show humidity.</label>
+            <default>true</default>
+        </entry>
+        <entry name="showWind" type="Bool">
+            <label>Show wind speed.</label>
+            <default>true</default>
+        </entry>
+        <entry name="showPressure" type="Bool">
+            <label>Show pressure.</label>
+            <default>true</default>
+        </entry>
+        <entry name="showDailyForecast" type="Bool">
+            <label>Show daily min/max summary.</label>
+            <default>true</default>
+        </entry>
+        <entry name="temperatureUnit" type="String">
+            <label>Temperature unit (C or F).</label>
+            <default>C</default>
+        </entry>
+        <entry name="windSpeedUnit" type="String">
+            <label>Wind speed unit (kmh, mph, ms, kn).</label>
+            <default>kmh</default>
+        </entry>
+        <entry name="pressureUnit" type="String">
+            <label>Pressure unit (hPa, mmHg, inHg).</label>
+            <default>hPa</default>
+        </entry>
+        <entry name="timeFormat" type="String">
+            <label>Time format (system, 12h, 24h).</label>
+            <default>system</default>
         </entry>
         <entry name="refreshIntervalMinutes" type="Int">
             <label>Weather refresh interval in minutes.</label>
             <default>15</default>
             <min>5</min>
-            <max>120</max>
+            <max>180</max>
+        </entry>
+        <entry name="autoRefresh" type="Bool">
+            <label>Enable periodic weather refresh.</label>
+            <default>true</default>
         </entry>
     </group>
 </kcfg>
