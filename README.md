@@ -1,46 +1,30 @@
-# Plasma Weather City List Widget
+# Plasma Weather Widget (CWP-style)
 
-KDE Plasma 6 weather widget inspired by:
-- **CWP KDE4 plasmoid style** (classic boxed forecast layout), and
-- **XFCE weather plugin settings model** (Location / Units / Appearance / Scrollbox).
+KDE Plasma 6 weather widget inspired by classic CWP visuals and XFCE weather settings.
 
-## Major changes in this version
+## Highlights
 
-- Removed city selector from the widget surface.
-- Location is now configured from Settings (like XFCE):
-  - location name,
-  - latitude,
-  - longitude,
-  - altitude,
-  - timezone,
-  - plus geocoding search from settings.
-- Added XFCE-style settings tabs:
-  - **Location**
-  - **Units**
-  - **Appearance**
-  - **Scrollbox**
-- Restyled widget to a CWP-like classic panel with:
-  - top scrollbox lines,
-  - left current conditions block,
-  - right large temperature block,
-  - multi-day forecast tiles.
+- Resizable layout with forecast tiles that remain visible when the widget size changes.
+- Transparent panel with configurable opacity.
+- CWP-inspired structure:
+  - location title,
+  - optional scrollbox,
+  - left current-conditions panel,
+  - right large temperature + details,
+  - forecast day tiles.
+- Settings pages are now exposed as **side tabs/categories** in Plasma config:
+  - Location
+  - Units
+  - Appearance
+  - Scrollbox
 
-## API
+## Location selection
 
-Uses Open-Meteo forecast + geocoding APIs (no API key required).
+Location is selected from **Settings → Location**:
+- search by city,
+- or manually set location name + latitude + longitude + timezone.
 
 ## Install / update
-
-```bash
-kpackagetool6 --type Plasma/Applet --remove org.example.plasma.weathercitylist || true
-kpackagetool6 --type Plasma/Applet --install .
-rm -rf ~/.cache/plasmashell/qmlcache
-plasmashell --replace
-```
-
-## Troubleshooting
-
-If Settings only shows generic pages (Keyboard Shortcuts/About) and not weather options, reinstall this version so `contents/config/config.qml` is picked up:
 
 ```bash
 kpackagetool6 --type Plasma/Applet --remove org.example.plasma.weathercitylist || true
