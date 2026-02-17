@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+    <kcfgfile name=""/>
+    <group name="General">
+        <entry name="locationName" type="String">
+            <label>Human-readable location name.</label>
+            <default>London, United Kingdom</default>
+        </entry>
+        <entry name="latitude" type="Double">
+            <label>Latitude of selected location.</label>
+            <default>51.5072</default>
+        </entry>
+        <entry name="longitude" type="Double">
+            <label>Longitude of selected location.</label>
+            <default>-0.1276</default>
+        </entry>
+        <entry name="altitude" type="Int">
+            <label>Altitude in meters.</label>
+            <default>35</default>
+        </entry>
+        <entry name="timezone" type="String">
+            <label>IANA timezone for the location.</label>
+            <default>Europe/London</default>
+        </entry>
+
+        <entry name="temperatureUnit" type="String"><default>C</default></entry>
+        <entry name="pressureUnit" type="String"><default>hPa</default></entry>
+        <entry name="windSpeedUnit" type="String"><default>kmh</default></entry>
+        <entry name="precipitationUnit" type="String"><default>mm</default></entry>
+        <entry name="altitudeUnit" type="String"><default>m</default></entry>
+        <entry name="apparentTemperatureMode" type="String"><default>apparent</default></entry>
+
+        <entry name="tooltipStyle" type="String"><default>verbose</default></entry>
+        <entry name="forecastLayout" type="String"><default>rows</default></entry>
+        <entry name="forecastDays" type="Int"><default>5</default><min>3</min><max>7</max></entry>
+        <entry name="roundValues" type="Bool"><default>true</default></entry>
+        <entry name="singlePanelRow" type="Bool"><default>true</default></entry>
+
+        <entry name="showScrollbox" type="Bool"><default>true</default></entry>
+        <entry name="scrollboxLines" type="Int"><default>2</default><min>1</min><max>6</max></entry>
+        <entry name="scrollboxItems" type="String"><default>Humidity;Wind;Pressure;Dew Point;Visibility</default></entry>
+        <entry name="animateTransitions" type="Bool"><default>true</default></entry>
+
+        <entry name="refreshIntervalMinutes" type="Int"><default>15</default><min>5</min><max>180</max></entry>
+        <entry name="autoRefresh" type="Bool"><default>true</default></entry>
+    </group>
+</kcfg>
