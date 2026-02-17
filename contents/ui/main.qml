@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
 
-Item {
+PlasmoidItem {
     id: root
 
     implicitWidth: 280
