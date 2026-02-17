@@ -37,3 +37,14 @@ kpackagetool6 --type Plasma/Applet --install .
 rm -rf ~/.cache/plasmashell/qmlcache
 plasmashell --replace
 ```
+
+## Troubleshooting
+
+If Settings only shows generic pages (Keyboard Shortcuts/About) and not weather options, reinstall this version so `contents/config/config.qml` is picked up:
+
+```bash
+kpackagetool6 --type Plasma/Applet --remove org.example.plasma.weathercitylist || true
+kpackagetool6 --type Plasma/Applet --install .
+rm -rf ~/.cache/plasmashell/qmlcache
+plasmashell --replace
+```
