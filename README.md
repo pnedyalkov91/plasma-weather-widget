@@ -8,9 +8,8 @@ A KDE Plasma widget inspired by the XFCE weather plugin workflow, with a simple 
 - Configurable custom city (Name|Latitude|Longitude format).
 - Current temperature, weather condition, and wind speed.
 - Automatic refresh interval (configurable).
-- Plasma 6.5-compatible single-view UI (no `fullRepresentation`/`compactRepresentation` API usage).
 
-## Install locally (Plasma 6.5 safe)
+## Install locally
 
 From this repository root:
 
