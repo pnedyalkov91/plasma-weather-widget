@@ -7,108 +7,25 @@ import org.kde.kirigami as Kirigami
 PlasmoidItem {
     id: root
 
-    implicitWidth: 340
-    implicitHeight: 280
+    implicitWidth: 460
+    implicitHeight: 340
 
-    property var builtinCities: [
-        { "name": "London", "country": "UK", "lat": 51.5072, "lon": -0.1276 },
-        { "name": "Berlin", "country": "Germany", "lat": 52.52, "lon": 13.405 },
-        { "name": "Paris", "country": "France", "lat": 48.8566, "lon": 2.3522 },
-        { "name": "Rome", "country": "Italy", "lat": 41.9028, "lon": 12.4964 },
-        { "name": "Tokyo", "country": "Japan", "lat": 35.6762, "lon": 139.6503 },
-        { "name": "New York", "country": "USA", "lat": 40.7128, "lon": -74.006 },
-        { "name": "Sofia", "country": "Bulgaria", "lat": 42.6977, "lon": 23.3219 }
-    ]
-
-    property var cities: []
-    property var selectedCityData: ({ "name": "London", "country": "UK", "lat": 51.5072, "lon": -0.1276 })
     property bool loading: false
-
     property real temperatureC: NaN
     property real apparentC: NaN
     property real windKmh: NaN
     property real pressureHpa: NaN
     property real humidityPercent: NaN
+    property real visibilityKm: NaN
+    property real dewPointC: NaN
     property int weatherCode: -1
-    property real maxTempC: NaN
-    property real minTempC: NaN
+    property var dailyData: []
+    property int scrollIndex: 0
     property string updateText: ""
 
-    function parseCityString(cityString) {
-        if (!cityString || cityString.length === 0) {
-            return null;
-        }
-
-        var parts = cityString.split("|");
-        if (parts.length < 3) {
-            return null;
-        }
-
-        var parsedLat = parseFloat(parts[1]);
-        var parsedLon = parseFloat(parts[2]);
-        if (isNaN(parsedLat) || isNaN(parsedLon)) {
-            return null;
-        }
-
-        return {
-            "name": parts[0],
-            "country": parts.length > 3 ? parts[3] : "Custom",
-            "lat": parsedLat,
-            "lon": parsedLon
-        };
-    }
-
-    function cityToConfigValue(city) {
-        return city.name + "|" + city.lat + "|" + city.lon;
-    }
-
-    function parseCustomCities() {
-        var parsedCities = [];
-        var raw = Plasmoid.configuration.customCityList;
-        if (!raw) {
-            return parsedCities;
-        }
-
-        var entries = raw.split(";");
-        for (var i = 0; i < entries.length; ++i) {
-            var parsed = parseCityString(entries[i].trim());
-            if (parsed) {
-                parsedCities.push(parsed);
-            }
-        }
-        return parsedCities;
-    }
-
-    function rebuildCityModel() {
-        var combined = builtinCities.slice();
-        var custom = parseCustomCities();
-        for (var i = 0; i < custom.length; ++i) {
-            combined.unshift(custom[i]);
-        }
-
-        var selected = parseCityString(Plasmoid.configuration.selectedCity);
-        if (selected) {
-            var exists = false;
-            for (var j = 0; j < combined.length; ++j) {
-                if (combined[j].name === selected.name
-                        && combined[j].lat === selected.lat
-                        && combined[j].lon === selected.lon) {
-                    exists = true;
-                    break;
-                }
-            }
-            if (!exists) {
-                combined.unshift(selected);
-            }
-            selectedCityData = selected;
-        }
-
-        cities = combined;
-    }
-
     function weatherCodeToText(code) {
-        if (code === 0) return "Clear sky";
-        if (code === 1 || code === 2) return "Partly cloudy";
+        if (code === 0) return "Clear";
+        if (code === 1 || code === 2) return "Partly Cloudy";
         if (code === 3) return "Overcast";
         if (code === 45 || code === 48) return "Fog";
         if (code === 51 || code === 53 || code === 55) return "Drizzle";
@@ -132,21 +49,16 @@ PlasmoidItem {
         return "weather-severe-alert";
     }
 
-    function formatTemp(celsius) {
-        if (isNaN(celsius)) {
-            return "--";
-        }
-        if (Plasmoid.configuration.temperatureUnit === "F") {
-            return Math.round((celsius * 9 / 5) + 32) + "°F";
-        }
-        return Math.round(celsius) + "°C";
+    function tempValue(celsius) {
+        if (isNaN(celsius)) return "--";
+        var value = Plasmoid.configuration.temperatureUnit === "F" ? (celsius * 9 / 5 + 32) : celsius;
+        if (Plasmoid.configuration.roundValues) value = Math.round(value);
+        else value = Number(value).toFixed(1);
+        return value + (Plasmoid.configuration.temperatureUnit === "F" ? "°F" : "°C");
     }
 
-    function formatWind(kmh) {
-        if (isNaN(kmh)) {
-            return "--";
-        }
-
+    function windValue(kmh) {
+        if (isNaN(kmh)) return "--";
         var unit = Plasmoid.configuration.windSpeedUnit;
         if (unit === "mph") return (kmh * 0.621371).toFixed(1) + " mph";
         if (unit === "ms") return (kmh / 3.6).toFixed(1) + " m/s";
@@ -154,94 +66,88 @@ PlasmoidItem {
         return Math.round(kmh) + " km/h";
     }
 
-    function formatPressure(hpa) {
-        if (isNaN(hpa)) {
-            return "--";
-        }
-
-        var unit = Plasmoid.configuration.pressureUnit;
-        if (unit === "mmHg") return (hpa * 0.750062).toFixed(0) + " mmHg";
-        if (unit === "inHg") return (hpa * 0.02953).toFixed(2) + " inHg";
+    function pressureValue(hpa) {
+        if (isNaN(hpa)) return "--";
+        if (Plasmoid.configuration.pressureUnit === "mmHg") return (hpa * 0.750062).toFixed(0) + " mmHg";
+        if (Plasmoid.configuration.pressureUnit === "inHg") return (hpa * 0.02953).toFixed(2) + " inHg";
         return Math.round(hpa) + " hPa";
     }
 
-    function formatTime(dateObj) {
-        if (Plasmoid.configuration.timeFormat === "12h") {
-            return Qt.formatTime(dateObj, "h:mm AP");
-        }
-        if (Plasmoid.configuration.timeFormat === "24h") {
-            return Qt.formatTime(dateObj, "HH:mm");
-        }
-        return dateObj.toLocaleTimeString(Qt.locale(), Locale.ShortFormat);
-    }
-
     function refreshNow() {
-        if (!selectedCityData) {
-            return;
-        }
-
         loading = true;
         var request = new XMLHttpRequest();
-        var endpoint = "https://api.open-meteo.com/v1/forecast?latitude=" + selectedCityData.lat
-            + "&longitude=" + selectedCityData.lon
-            + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,surface_pressure"
-            + "&daily=temperature_2m_max,temperature_2m_min"
-            + "&timezone=auto";
+        var endpoint = "https://api.open-meteo.com/v1/forecast?latitude=" + Plasmoid.configuration.latitude
+            + "&longitude=" + Plasmoid.configuration.longitude
+            + "&timezone=" + encodeURIComponent(Plasmoid.configuration.timezone)
+            + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,surface_pressure,dew_point_2m,visibility"
+            + "&daily=weather_code,temperature_2m_max,temperature_2m_min";
 
         request.onreadystatechange = function() {
-            if (request.readyState !== XMLHttpRequest.DONE) {
-                return;
-            }
-
+            if (request.readyState !== XMLHttpRequest.DONE) return;
             loading = false;
             if (request.status !== 200) {
-                updateText = "Unable to fetch weather";
+                updateText = "Update failed";
                 return;
             }
 
             var data = JSON.parse(request.responseText);
-            if (!data.current) {
-                updateText = "Weather data unavailable";
-                return;
-            }
+            if (!data.current) return;
 
             temperatureC = data.current.temperature_2m;
             apparentC = data.current.apparent_temperature;
             humidityPercent = data.current.relative_humidity_2m;
-            weatherCode = data.current.weather_code;
             windKmh = data.current.wind_speed_10m;
             pressureHpa = data.current.surface_pressure;
+            dewPointC = data.current.dew_point_2m;
+            visibilityKm = data.current.visibility / 1000.0;
+            weatherCode = data.current.weather_code;
 
-            if (data.daily && data.daily.temperature_2m_max && data.daily.temperature_2m_min) {
-                maxTempC = data.daily.temperature_2m_max[0];
-                minTempC = data.daily.temperature_2m_min[0];
+            dailyData = [];
+            if (data.daily && data.daily.time) {
+                var maxDays = Math.min(Plasmoid.configuration.forecastDays, data.daily.time.length);
+                for (var i = 0; i < maxDays; ++i) {
+                    dailyData.push({
+                        day: Qt.formatDate(new Date(data.daily.time[i]), "dd MMM"),
+                        maxC: data.daily.temperature_2m_max[i],
+                        minC: data.daily.temperature_2m_min[i],
+                        code: data.daily.weather_code[i]
+                    });
+                }
             }
 
-            updateText = "Updated " + formatTime(new Date());
+            updateText = "Updated " + new Date().toLocaleTimeString(Qt.locale(), Locale.ShortFormat);
         };
 
         request.open("GET", endpoint);
         request.send();
     }
 
-    function applySelectedCity(city) {
-        if (!city) {
-            return;
+    function scrollLines() {
+        var raw = Plasmoid.configuration.scrollboxItems;
+        if (!raw || raw.length === 0) {
+            return ["Humidity", "Wind", "Dew Point", "Visibility", "Pressure"];
         }
-        selectedCityData = city;
-        Plasmoid.configuration.selectedCity = cityToConfigValue(city);
-        refreshNow();
+        return raw.split(";");
     }
 
-    Component.onCompleted: {
-        rebuildCityModel();
-        refreshNow();
+    function scrollLineText(labelName) {
+        var key = labelName.trim().toLowerCase();
+        if (key === "humidity") return "Humidity: " + (isNaN(humidityPercent) ? "--" : Math.round(humidityPercent) + "%");
+        if (key === "wind") return "Wind: " + windValue(windKmh);
+        if (key === "pressure") return "Pressure: " + pressureValue(pressureHpa);
+        if (key === "dew point") return "Dew Point: " + tempValue(dewPointC);
+        if (key === "visibility") return "Visibility: " + (isNaN(visibilityKm) ? "--" : visibilityKm.toFixed(1) + " km");
+        return labelName + ": --";
     }
+
+    Component.onCompleted: refreshNow()
 
     Connections {
         target: Plasmoid.configuration
-        function onSelectedCityChanged() { rebuildCityModel(); refreshNow(); }
-        function onCustomCityListChanged() { rebuildCityModel(); }
+        function onLatitudeChanged() { refreshNow(); }
+        function onLongitudeChanged() { refreshNow(); }
+        function onTimezoneChanged() { refreshNow(); }
+        function onForecastDaysChanged() { refreshNow(); }
     }
 
     Timer {
@@ -251,142 +157,168 @@ PlasmoidItem {
         onTriggered: refreshNow()
     }
 
+    Timer {
+        interval: 3000
+        running: Plasmoid.configuration.showScrollbox && Plasmoid.configuration.animateTransitions
+        repeat: true
+        onTriggered: {
+            var lines = scrollLines();
+            scrollIndex = lines.length === 0 ? 0 : (scrollIndex + 1) % lines.length;
+        }
+    }
+
     Rectangle {
         anchors.fill: parent
-        radius: 18
-        color: Qt.rgba(0.14, 0.18, 0.29, 0.92)
-        border.color: Qt.rgba(0.70, 0.78, 1.0, 0.25)
-
+        radius: 4
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: "#7f5a2d" }
+            GradientStop { position: 1.0; color: "#3f3226" }
+        }
+        border.color: "#8e7c68"
+        border.width: 1
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 14
-            spacing: 10
+            anchors.margins: 6
+            spacing: 5
 
-            RowLayout {
+            Rectangle {
+                visible: Plasmoid.configuration.showScrollbox
                 Layout.fillWidth: true
+                Layout.preferredHeight: 26 * Math.max(1, Plasmoid.configuration.scrollboxLines)
+                color: "#2f2f2f"
+                border.color: "#9a8d7c"
 
-                ComboBox {
-                    id: citySelector
-                    Layout.fillWidth: true
-                    model: cities
-                    textRole: "name"
+                Column {
+                    anchors.fill: parent
+                    anchors.margins: 6
+                    spacing: 4
 
-                    Component.onCompleted: {
-                        for (var i = 0; i < cities.length; ++i) {
-                            if (cities[i].name === selectedCityData.name
-                                    && cities[i].lat === selectedCityData.lat
-                                    && cities[i].lon === selectedCityData.lon) {
-                                currentIndex = i;
-                                break;
+                    Repeater {
+                        model: Math.max(1, Plasmoid.configuration.scrollboxLines)
+                        Label {
+                            color: "white"
+                            text: {
+                                var lines = root.scrollLines();
+                                if (lines.length === 0) return "";
+                                return root.scrollLineText(lines[(root.scrollIndex + index) % lines.length]);
                             }
                         }
                     }
-
-                    onActivated: function(index) {
-                        applySelectedCity(cities[index]);
-                    }
-                }
-
-                ToolButton {
-                    text: "⟳"
-                    onClicked: refreshNow()
                 }
             }
 
-            RowLayout {
+            Rectangle {
                 Layout.fillWidth: true
-                spacing: 8
+                Layout.fillHeight: true
+                color: "#594736"
+                border.color: "#9a8d7c"
 
-                Kirigami.Icon {
-                    source: weatherCodeToIcon(weatherCode)
-                    Layout.preferredHeight: Kirigami.Units.iconSizes.huge
-                    Layout.preferredWidth: Kirigami.Units.iconSizes.huge
-                }
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 5
+                    spacing: 6
 
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 2
+                    Rectangle {
+                        Layout.preferredWidth: 160
+                        Layout.fillHeight: true
+                        color: "#4a3b2d"
+                        border.color: "#8e7c68"
 
-                    Label {
-                        text: formatTemp(temperatureC)
-                        font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 2.3
-                        font.bold: true
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 6
+                            spacing: 5
+
+                            Label { text: Qt.formatTime(new Date(), "HH:mm"); color: "white"; font.bold: true }
+                            Kirigami.Icon {
+                                source: weatherCodeToIcon(weatherCode)
+                                Layout.alignment: Qt.AlignHCenter
+                                Layout.preferredWidth: 72
+                                Layout.preferredHeight: 72
+                            }
+                            Label { text: weatherCodeToText(weatherCode); color: "white"; Layout.alignment: Qt.AlignHCenter }
+                            Label {
+                                text: Plasmoid.configuration.locationName
+                                color: "white"
+                                wrapMode: Text.WordWrap
+                                horizontalAlignment: Text.AlignHCenter
+                                Layout.fillWidth: true
+                                font.bold: true
+                            }
+                            Item { Layout.fillHeight: true }
+                            Label { text: loading ? "Updating..." : updateText; color: "#d7d7d7"; font.pixelSize: 10 }
+                        }
                     }
-                    Label {
-                        text: weatherCodeToText(weatherCode)
-                        opacity: 0.9
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        spacing: 4
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 118
+                            color: "#4a3b2d"
+                            border.color: "#8e7c68"
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 6
+                                spacing: 10
+
+                                Label {
+                                    text: tempValue(temperatureC)
+                                    color: "white"
+                                    font.pixelSize: 44
+                                    font.bold: true
+                                }
+
+                                Column {
+                                    spacing: 4
+                                    Label { text: "Wind: " + windValue(windKmh); color: "white" }
+                                    Label { text: "Feels like: " + tempValue(apparentC); color: "white" }
+                                    Label { text: "Humidity: " + (isNaN(humidityPercent) ? "--" : Math.round(humidityPercent) + "%"); color: "white" }
+                                    Label { text: "Pressure: " + pressureValue(pressureHpa); color: "white" }
+                                }
+                            }
+                        }
+
+                        GridLayout {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            columns: 3
+                            rowSpacing: 4
+                            columnSpacing: 4
+
+                            Repeater {
+                                model: dailyData
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    color: "#4a3b2d"
+                                    border.color: "#8e7c68"
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+
+                                    Column {
+                                        anchors.fill: parent
+                                        anchors.margins: 4
+                                        spacing: 2
+
+                                        Label { text: modelData.day; color: "white"; font.bold: true }
+                                        Kirigami.Icon {
+                                            source: weatherCodeToIcon(modelData.code)
+                                            width: 28
+                                            height: 28
+                                        }
+                                        Label { text: tempValue(modelData.maxC) + " / " + tempValue(modelData.minC); color: "white" }
+                                        Label { text: weatherCodeToText(modelData.code); color: "#f0f0f0"; font.pixelSize: 10 }
+                                    }
+                                }
+                            }
+                        }
                     }
-                    Label {
-                        text: selectedCityData.name + " · " + selectedCityData.country
-                        opacity: 0.75
-                    }
                 }
-            }
-
-            GridLayout {
-                Layout.fillWidth: true
-                columns: 2
-                columnSpacing: 16
-                rowSpacing: 6
-
-                Label {
-                    visible: Plasmoid.configuration.showFeelsLike
-                    text: "Feels like"
-                    opacity: 0.8
-                }
-                Label {
-                    visible: Plasmoid.configuration.showFeelsLike
-                    text: formatTemp(apparentC)
-                }
-
-                Label {
-                    visible: Plasmoid.configuration.showHumidity
-                    text: "Humidity"
-                    opacity: 0.8
-                }
-                Label {
-                    visible: Plasmoid.configuration.showHumidity
-                    text: isNaN(humidityPercent) ? "--" : Math.round(humidityPercent) + "%"
-                }
-
-                Label {
-                    visible: Plasmoid.configuration.showWind
-                    text: "Wind"
-                    opacity: 0.8
-                }
-                Label {
-                    visible: Plasmoid.configuration.showWind
-                    text: formatWind(windKmh)
-                }
-
-                Label {
-                    visible: Plasmoid.configuration.showPressure
-                    text: "Pressure"
-                    opacity: 0.8
-                }
-                Label {
-                    visible: Plasmoid.configuration.showPressure
-                    text: formatPressure(pressureHpa)
-                }
-            }
-
-            Label {
-                visible: Plasmoid.configuration.showDailyForecast
-                Layout.fillWidth: true
-                text: (isNaN(minTempC) || isNaN(maxTempC))
-                    ? ""
-                    : "Today: " + formatTemp(minTempC) + " / " + formatTemp(maxTempC)
-                opacity: 0.9
-            }
-
-            Item { Layout.fillHeight: true }
-
-            Label {
-                Layout.fillWidth: true
-                text: loading ? "Updating…" : updateText
-                horizontalAlignment: Text.AlignRight
-                opacity: 0.65
             }
         }
     }
