@@ -2,13 +2,12 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import org.kde.plasma.plasmoid
+import org.kde.plasma.core as PlasmaCore
+import org.kde.plasma.core as PlasmaCore
 import org.kde.kirigami as Kirigami
 
-Item {
+PlasmoidItem {
     id: root
-
-    implicitWidth: 280
-    implicitHeight: 220
 
     property var cities: [
         { "name": "London", "country": "UK", "lat": 51.5072, "lon": -0.1276 },
@@ -147,32 +146,23 @@ Item {
         onTriggered: fetchWeather()
     }
 
-    ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: Kirigami.Units.smallSpacing
+    Plasmoid.compactRepresentation: RowLayout {
         spacing: Kirigami.Units.smallSpacing
 
-        RowLayout {
-            Layout.fillWidth: true
-
-            Kirigami.Icon {
-                source: "weather-clear"
-                Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
-                Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-            }
-
-            Label {
-                text: selectedCityData.name
-                font.bold: true
-                Layout.fillWidth: true
-                elide: Text.ElideRight
-            }
-
-            Label {
-                text: loading ? "…" : temperatureText
-                font.bold: true
-            }
+        Kirigami.Icon {
+            source: "weather-clear"
+            Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
         }
+
+        Label {
+            text: loading ? "…" : temperatureText
+            font.bold: true
+        }
+    }
+
+    Plasmoid.fullRepresentation: ColumnLayout {
+        spacing: Kirigami.Units.smallSpacing
 
         ComboBox {
             id: citySelector
@@ -197,6 +187,18 @@ Item {
         }
 
         Label {
+            text: selectedCityData.name + " · " + selectedCityData.country
+            font.bold: true
+            Layout.fillWidth: true
+        }
+
+        Label {
+            text: temperatureText
+            font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 2
+            Layout.fillWidth: true
+        }
+
+        Label {
             text: weatherText
             Layout.fillWidth: true
         }
@@ -210,10 +212,6 @@ Item {
             text: updateText
             opacity: 0.7
             Layout.fillWidth: true
-        }
-
-        Item {
-            Layout.fillHeight: true
         }
 
         Button {
