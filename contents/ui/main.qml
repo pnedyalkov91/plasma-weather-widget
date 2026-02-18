@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import org.kde.plasma.plasmoid
+import org.kde.plasma.core as PlasmaCore
 import org.kde.kirigami as Kirigami
 
 PlasmoidItem {
@@ -28,6 +29,7 @@ PlasmoidItem {
     property int panelScrollIndex: 0
     property string updateText: ""
     readonly property bool hasSelectedTown: (Plasmoid.configuration.locationName || "").trim().length > 0
+    readonly property bool isPanelFormFactor: Plasmoid.formFactor === PlasmaCore.Types.Horizontal || Plasmoid.formFactor === PlasmaCore.Types.Vertical
     readonly property string bundledOpenWeatherApiKey: "8003225e8825db83758c237068447229"
     readonly property string bundledWeatherApiKey: "601ba4ac57404ec29ff120510261802"
 
@@ -481,9 +483,44 @@ PlasmoidItem {
         }
     }
 
+    Item {
+        id: panelCollapsedView
+        anchors.fill: parent
+        visible: root.isPanelFormFactor && !Plasmoid.expanded
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 4
+            anchors.rightMargin: 4
+            spacing: 6
+
+            Kirigami.Icon {
+                visible: !hasSelectedTown || Plasmoid.configuration.panelShowWeatherIcon
+                source: weatherCodeToIcon(weatherCode)
+                Layout.preferredWidth: Math.max(14, parent.height - 6)
+                Layout.preferredHeight: Math.max(14, parent.height - 6)
+            }
+
+            Label {
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+                color: Kirigami.Theme.textColor
+                text: {
+                    if (!hasSelectedTown) {
+                        return "";
+                    }
+                    var city = (Plasmoid.configuration.locationName || "").split(",")[0].trim();
+                    var info = root.panelLineText();
+                    return city + (info.length > 0 ? ", " + info : "");
+                }
+            }
+        }
+    }
+
     Rectangle {
         anchors.fill: parent
         radius: 4
+        visible: !root.isPanelFormFactor || Plasmoid.expanded
         color: Plasmoid.configuration.transparentBackground
             ? "transparent"
             : Qt.rgba(0.22, 0.16, 0.10, Math.max(0.0, Math.min(1, Plasmoid.configuration.panelOpacityPercent / 100)))
