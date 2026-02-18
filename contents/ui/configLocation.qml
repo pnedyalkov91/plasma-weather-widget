@@ -21,6 +21,7 @@ KCM.SimpleKCM {
     property bool autoDetectBusy: false
     property string autoDetectStatus: ""
     property string preferredLanguage: Qt.locale().name.split("_")[0]
+    property string selectedProviderName: ""
     property bool searchBusy: false
     property int searchRequestId: 0
 
@@ -78,14 +79,6 @@ KCM.SimpleKCM {
     function closeSearchPage() {
         root.pageIndex = 0;
         searchBusy = false;
-    }
-
-    function confirmSelectedResult() {
-        if (!searchPanel.selectedResult) {
-            return;
-        }
-        root.applySearchResult(searchPanel.selectedResult);
-        root.closeSearchPage();
     }
 
     function performSearch(query) {
@@ -252,6 +245,7 @@ KCM.SimpleKCM {
         cfg_latitude = item.latitude;
         cfg_longitude = item.longitude;
         cfg_timezone = item.timezone ? item.timezone : cfg_timezone;
+        selectedProviderName = item.provider ? item.provider : selectedProviderName;
         if (item.elevation !== undefined) {
             cfg_altitude = Math.round(item.elevation);
         }
@@ -521,6 +515,24 @@ KCM.SimpleKCM {
                         Item { Layout.fillWidth: true }
                     }
 
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+
+                        Label {
+                            text: "Location:  " + (searchPanel.selectedResult ? root.formatResultTitle(searchPanel.selectedResult) : root.cfg_locationName)
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                        Label {
+                            text: "Provider:  " + (searchPanel.selectedResult && searchPanel.selectedResult.provider
+                                ? searchPanel.selectedResult.provider
+                                : (root.selectedProviderName.length > 0 ? root.selectedProviderName : "Open-Meteo"))
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                    }
+
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 6
@@ -593,11 +605,13 @@ KCM.SimpleKCM {
                                         searchPanel.selectedIndex = index;
                                         searchPanel.selectedResult = modelData;
                                         resultsList.currentIndex = index;
+                                        root.applySearchResult(modelData);
                                     }
                                     onDoubleClicked: {
                                         searchPanel.selectedIndex = index;
                                         searchPanel.selectedResult = modelData;
-                                        root.confirmSelectedResult();
+                                        resultsList.currentIndex = index;
+                                        root.applySearchResult(modelData);
                                     }
                                 }
                             }
@@ -606,13 +620,19 @@ KCM.SimpleKCM {
                         Column {
                             anchors.centerIn: parent
                             width: parent.width - 32
-                            spacing: 8
+                            spacing: 10
                             visible: root.searchBusy || (searchField.text.trim().length >= 2 && root.searchResults.length === 0)
+
+                            BusyIndicator {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                running: root.searchBusy
+                                visible: root.searchBusy
+                            }
 
                             Label {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                text: root.searchBusy ? "Searching…" : "No weather stations found for '" + searchField.text.trim() + "'"
-                                font.pixelSize: 34
+                                text: root.searchBusy ? "Loading locations…" : "No weather stations found for '" + searchField.text.trim() + "'"
+                                font.pixelSize: root.searchBusy ? 18 : 30
                                 font.bold: true
                                 horizontalAlignment: Text.AlignHCenter
                                 width: parent.width
@@ -629,22 +649,6 @@ KCM.SimpleKCM {
                                 wrapMode: Text.WordWrap
                                 opacity: 0.82
                             }
-                        }
-                    }
-
-                    RowLayout {
-                        Layout.alignment: Qt.AlignRight
-                        spacing: 8
-
-                        Button {
-                            text: "Cancel"
-                            onClicked: root.closeSearchPage()
-                        }
-
-                        Button {
-                            text: "OK"
-                            enabled: searchPanel.selectedResult !== null
-                            onClicked: root.confirmSelectedResult()
                         }
                     }
                 }
