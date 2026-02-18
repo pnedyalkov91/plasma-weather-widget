@@ -53,6 +53,28 @@ PlasmoidItem {
         return "weather-few-clouds";
     }
 
+    function openWeatherCodeToWmo(code) {
+        if (code >= 200 && code < 300) return 95;
+        if (code >= 300 && code < 600) return 63;
+        if (code >= 600 && code < 700) return 73;
+        if (code >= 700 && code < 800) return 45;
+        if (code === 800) return 0;
+        if (code === 801 || code === 802) return 2;
+        if (code === 803 || code === 804) return 3;
+        return 2;
+    }
+
+    function metNoSymbolToWmo(symbolCode) {
+        if (!symbolCode) return 2;
+        if (symbolCode.indexOf("thunder") >= 0) return 95;
+        if (symbolCode.indexOf("snow") >= 0 || symbolCode.indexOf("sleet") >= 0) return 73;
+        if (symbolCode.indexOf("rain") >= 0 || symbolCode.indexOf("drizzle") >= 0) return 63;
+        if (symbolCode.indexOf("fog") >= 0) return 45;
+        if (symbolCode.indexOf("clearsky") >= 0) return 0;
+        if (symbolCode.indexOf("cloudy") >= 0) return 3;
+        return 2;
+    }
+
     function tempValue(celsius) {
         if (isNaN(celsius)) return "--";
         var value = Plasmoid.configuration.temperatureUnit === "F" ? (celsius * 9 / 5 + 32) : celsius;
@@ -93,6 +115,99 @@ PlasmoidItem {
         }
 
         loading = true;
+
+        var provider = Plasmoid.configuration.weatherProvider || "openMeteo";
+
+        if (provider === "openWeather") {
+            var apiKey = (Plasmoid.configuration.openWeatherApiKey || "").trim();
+            if (apiKey.length === 0) {
+                loading = false;
+                updateText = "OpenWeather API key missing";
+                return;
+            }
+
+            var owReq = new XMLHttpRequest();
+            var owEndpoint = "https://api.openweathermap.org/data/2.5/weather?lat=" + Plasmoid.configuration.latitude
+                + "&lon=" + Plasmoid.configuration.longitude
+                + "&units=metric&appid=" + encodeURIComponent(apiKey);
+
+            owReq.onreadystatechange = function() {
+                if (owReq.readyState !== XMLHttpRequest.DONE) return;
+                loading = false;
+                if (owReq.status !== 200) {
+                    updateText = "OpenWeather update failed";
+                    return;
+                }
+
+                var data = JSON.parse(owReq.responseText);
+                if (!data.main) return;
+
+                temperatureC = data.main.temp;
+                apparentC = data.main.feels_like;
+                humidityPercent = data.main.humidity;
+                pressureHpa = data.main.pressure;
+                windKmh = data.wind && data.wind.speed !== undefined ? data.wind.speed * 3.6 : NaN;
+                dewPointC = NaN;
+                visibilityKm = data.visibility !== undefined ? (data.visibility / 1000.0) : NaN;
+                weatherCode = (data.weather && data.weather.length > 0) ? openWeatherCodeToWmo(data.weather[0].id) : 2;
+                dailyData = [];
+                updateText = "Updated " + Qt.formatTime(new Date(), "HH:mm") + " (OpenWeather)";
+            };
+
+            owReq.open("GET", owEndpoint);
+            owReq.send();
+            return;
+        }
+
+        if (provider === "metno") {
+            var metReq = new XMLHttpRequest();
+            var metEndpoint = "https://api.met.no/weatherapi/locationforecast/2.0/compact?lat="
+                + encodeURIComponent(Plasmoid.configuration.latitude)
+                + "&lon="
+                + encodeURIComponent(Plasmoid.configuration.longitude);
+
+            metReq.onreadystatechange = function() {
+                if (metReq.readyState !== XMLHttpRequest.DONE) return;
+                loading = false;
+                if (metReq.status !== 200) {
+                    updateText = "met.no update failed";
+                    return;
+                }
+
+                var data = JSON.parse(metReq.responseText);
+                if (!data.properties || !data.properties.timeseries || data.properties.timeseries.length === 0) {
+                    updateText = "met.no data unavailable";
+                    return;
+                }
+
+                var ts = data.properties.timeseries[0];
+                var details = ts.data && ts.data.instant ? ts.data.instant.details : null;
+                if (!details) {
+                    updateText = "met.no data unavailable";
+                    return;
+                }
+
+                temperatureC = details.air_temperature;
+                apparentC = details.air_temperature;
+                humidityPercent = details.relative_humidity;
+                pressureHpa = details.air_pressure_at_sea_level;
+                windKmh = details.wind_speed !== undefined ? details.wind_speed * 3.6 : NaN;
+                dewPointC = details.dew_point_temperature;
+                visibilityKm = NaN;
+
+                var symbol = ts.data && ts.data.next_1_hours && ts.data.next_1_hours.summary
+                    ? ts.data.next_1_hours.summary.symbol_code
+                    : "";
+                weatherCode = metNoSymbolToWmo(symbol);
+                dailyData = [];
+                updateText = "Updated " + Qt.formatTime(new Date(), "HH:mm") + " (met.no)";
+            };
+
+            metReq.open("GET", metEndpoint);
+            metReq.send();
+            return;
+        }
+
         var request = new XMLHttpRequest();
         var endpoint = "https://api.open-meteo.com/v1/forecast?latitude=" + Plasmoid.configuration.latitude
             + "&longitude=" + Plasmoid.configuration.longitude
@@ -132,7 +247,7 @@ PlasmoidItem {
                     });
                 }
             }
-            updateText = "Updated " + Qt.formatTime(new Date(), "HH:mm");
+            updateText = "Updated " + Qt.formatTime(new Date(), "HH:mm") + " (Open-Meteo)";
         };
 
         request.open("GET", endpoint);
@@ -163,6 +278,8 @@ PlasmoidItem {
         function onLatitudeChanged() { refreshNow(); }
         function onLongitudeChanged() { refreshNow(); }
         function onTimezoneChanged() { refreshNow(); }
+        function onWeatherProviderChanged() { refreshNow(); }
+        function onOpenWeatherApiKeyChanged() { refreshNow(); }
         function onForecastDaysChanged() { refreshNow(); }
     }
 

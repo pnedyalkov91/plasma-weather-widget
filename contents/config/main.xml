@@ -12,6 +12,9 @@
         <entry name="altitude" type="Int"><default>0</default></entry>
         <entry name="timezone" type="String"><default></default></entry>
 
+        <entry name="weatherProvider" type="String"><default>openMeteo</default></entry>
+        <entry name="openWeatherApiKey" type="String"><default></default></entry>
+
         <entry name="temperatureUnit" type="String"><default>C</default></entry>
         <entry name="pressureUnit" type="String"><default>hPa</default></entry>
         <entry name="windSpeedUnit" type="String"><default>kmh</default></entry>
