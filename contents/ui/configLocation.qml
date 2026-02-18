@@ -60,6 +60,12 @@ KCM.SimpleKCM {
         return item.display_name ? item.display_name : "";
     }
 
+    function formatResultListItem(item) {
+        var title = formatResultTitle(item);
+        var provider = item && item.provider ? item.provider : "Unknown provider";
+        return title + " (" + provider + ")";
+    }
+
     function openSearchPage() {
         searchPanel.selectedResult = null;
         searchPanel.selectedIndex = -1;
@@ -517,13 +523,12 @@ KCM.SimpleKCM {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 8
+                        spacing: 6
 
                         TextField {
                             id: searchField
-                            Layout.preferredWidth: Math.min(460, searchPanel.width * 2.72)
                             Layout.fillWidth: true
-                            placeholderText: ""
+                            placeholderText: "Search city"
                             selectByMouse: true
                             onTextChanged: {
                                 searchPanel.selectedResult = null;
@@ -539,23 +544,22 @@ KCM.SimpleKCM {
                             onAccepted: root.performSearch(text)
                         }
 
-                        Button {
-                            text: "Search"
-                            icon.name: "edit-find"
-                            enabled: searchField.text.trim().length >= 2
-                            onClicked: root.performSearch(searchField.text)
+                        ToolButton {
+                            text: "✕"
+                            visible: searchField.text.length > 0
+                            onClicked: {
+                                searchField.clear();
+                                root.searchResults = [];
+                                root.searchBusy = false;
+                            }
                         }
-
-                        Item { Layout.fillWidth: true }
                     }
-
-                    Label { text: "Results"; font.bold: true; opacity: 0.8 }
 
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         border.color: Qt.rgba(0.6, 0.6, 0.6, 1)
-                        color: "transparent"
+                        color: Qt.rgba(0.2, 0.2, 0.2, 0.45)
 
                         ListView {
                             id: resultsList
@@ -563,37 +567,24 @@ KCM.SimpleKCM {
                             clip: true
                             model: root.searchResults
                             currentIndex: searchPanel.selectedIndex
+                            visible: root.searchResults.length > 0
 
                             delegate: Rectangle {
                                 required property var modelData
                                 required property int index
 
                                 width: ListView.view.width
-                                height: 44
+                                height: 36
                                 color: index === searchPanel.selectedIndex ? Kirigami.Theme.highlightColor : "transparent"
 
-                                Column {
+                                Label {
                                     anchors.fill: parent
                                     anchors.leftMargin: 8
                                     anchors.rightMargin: 8
-                                    anchors.topMargin: 4
-                                    spacing: 1
-
-                                    Label {
-                                        width: parent.width
-                                        text: root.formatResultTitle(modelData)
-                                        color: index === searchPanel.selectedIndex ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
-                                        elide: Text.ElideRight
-                                    }
-                                    Label {
-                                        width: parent.width
-                                        font.pixelSize: 10
-                                        opacity: 0.75
-                                        text: "[" + (modelData.provider ? modelData.provider : "Unknown") + "] "
-                                            + Number(modelData.latitude).toFixed(5) + ", " + Number(modelData.longitude).toFixed(5)
-                                        color: index === searchPanel.selectedIndex ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
-                                        elide: Text.ElideRight
-                                    }
+                                    verticalAlignment: Text.AlignVCenter
+                                    text: root.formatResultListItem(modelData)
+                                    color: index === searchPanel.selectedIndex ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                                    elide: Text.ElideRight
                                 }
 
                                 MouseArea {
@@ -611,20 +602,34 @@ KCM.SimpleKCM {
                                 }
                             }
                         }
-                    }
 
-                    Label {
-                        visible: root.searchBusy
-                        Layout.alignment: Qt.AlignRight
-                        text: "Searching…"
-                        opacity: 0.72
-                    }
+                        Column {
+                            anchors.centerIn: parent
+                            width: parent.width - 32
+                            spacing: 8
+                            visible: root.searchBusy || (searchField.text.trim().length >= 2 && root.searchResults.length === 0)
 
-                    Label {
-                        visible: !root.searchBusy && searchField.text.trim().length >= 2 && root.searchResults.length === 0
-                        Layout.alignment: Qt.AlignRight
-                        text: "City not found."
-                        opacity: 0.8
+                            Label {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: root.searchBusy ? "Searching…" : "No weather stations found for '" + searchField.text.trim() + "'"
+                                font.pixelSize: 34
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                                width: parent.width
+                                wrapMode: Text.WordWrap
+                                opacity: 0.9
+                            }
+
+                            Label {
+                                visible: !root.searchBusy
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: "Try a different spelling or another nearby city name."
+                                width: parent.width
+                                horizontalAlignment: Text.AlignHCenter
+                                wrapMode: Text.WordWrap
+                                opacity: 0.82
+                            }
+                        }
                     }
 
                     RowLayout {
