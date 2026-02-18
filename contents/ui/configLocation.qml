@@ -256,9 +256,15 @@ KCM.SimpleKCM {
             fetchOpenMeteo();
             fetchOpenWeather();
             fetchWeatherApi();
+        } else if (selectedProvider === "metno") {
+            // met.no does not provide a compatible city-search endpoint here.
+            searchBusy = false;
+            searchResults = [];
+            searchPanel.selectedResult = null;
+            searchPanel.selectedIndex = -1;
+            resultsList.currentIndex = -1;
         } else {
-            // met.no has no city-search API; fallback to Open-Meteo geocoding.
-            fetchOpenMeteo();
+            searchBusy = false;
         }
     }
 
