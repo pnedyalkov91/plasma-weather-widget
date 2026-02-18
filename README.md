@@ -30,6 +30,7 @@ plasmashell --replace
 
 ## Recent fixes
 
+- Fixed Location page load error by replacing unsupported `leftPadding` usage with layout margins for Plasma/Qt compatibility.
 - Added Location mode toggle: **Automatically detect location** vs **Use manual location**; manual controls and **Change...** are disabled/hidden in auto mode.
 - Made the city search input field explicitly visible in dark themes.
 - Added clear row highlight for selected city in search results.

@@ -105,14 +105,14 @@ KCM.SimpleKCM {
 
             Label {
                 Layout.fillWidth: true
-                leftPadding: 24
+                Layout.leftMargin: 24
                 wrapMode: Text.WordWrap
                 text: "Geolocation can be provided by KDE/GeoClue2 depending on system configuration and permissions."
                 opacity: 0.75
             }
 
             RowLayout {
-                leftPadding: 24
+                Layout.leftMargin: 24
                 RadioButton {
                     text: "Use manual location"
                     checked: !root.cfg_autoDetectLocation
