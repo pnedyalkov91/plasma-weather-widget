@@ -70,6 +70,22 @@ KCM.SimpleKCM {
         return title + " (" + provider + ")";
     }
 
+    function selectedProviderDisplayName() {
+        if (cfg_weatherProvider === "adaptive") {
+            return "All";
+        }
+        if (cfg_weatherProvider === "openWeather") {
+            return "OpenWeather";
+        }
+        if (cfg_weatherProvider === "weatherApi") {
+            return "WeatherAPI.com";
+        }
+        if (cfg_weatherProvider === "metno") {
+            return "met.no";
+        }
+        return "Open-Meteo";
+    }
+
     function openSearchPage() {
         searchPanel.selectedResult = null;
         searchPanel.selectedIndex = -1;
@@ -248,7 +264,9 @@ KCM.SimpleKCM {
             req.send();
         }
 
-        if (selectedProvider === "openWeather") {
+        if (selectedProvider === "openMeteo") {
+            fetchOpenMeteo();
+        } else if (selectedProvider === "openWeather") {
             fetchOpenWeather();
         } else if (selectedProvider === "weatherApi") {
             fetchWeatherApi();
@@ -631,7 +649,7 @@ KCM.SimpleKCM {
                         Label {
                             text: "Provider:  " + (searchPanel.selectedResult && searchPanel.selectedResult.provider
                                 ? searchPanel.selectedResult.provider
-                                : (root.selectedProviderName.length > 0 ? root.selectedProviderName : "Open-Meteo"))
+                                : root.selectedProviderDisplayName())
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
@@ -747,7 +765,7 @@ KCM.SimpleKCM {
                             Label {
                                 visible: !root.searchBusy
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                text: "Try a different spelling or another nearby city name."
+                                text: "If you've used this weather station in the past, it's possible that a server outage at the weather station provider has made it temporarily unavailable. Try again later."
                                 width: parent.width
                                 horizontalAlignment: Text.AlignHCenter
                                 wrapMode: Text.WordWrap
