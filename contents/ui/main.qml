@@ -9,6 +9,8 @@ PlasmoidItem {
 
     implicitWidth: 520
     implicitHeight: 280
+    switchWidth: 520
+    switchHeight: 280
 
     property bool loading: false
     property real temperatureC: NaN
