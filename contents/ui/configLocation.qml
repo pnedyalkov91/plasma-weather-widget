@@ -21,6 +21,8 @@ KCM.SimpleKCM {
     property bool autoDetectBusy: false
     property string autoDetectStatus: ""
     property string preferredLanguage: Qt.locale().name.split("_")[0]
+    property bool searchBusy: false
+    property int searchRequestId: 0
 
     property int pageIndex: 0
 
@@ -69,6 +71,15 @@ KCM.SimpleKCM {
 
     function closeSearchPage() {
         root.pageIndex = 0;
+        searchBusy = false;
+    }
+
+    function confirmSelectedResult() {
+        if (!searchPanel.selectedResult) {
+            return;
+        }
+        root.applySearchResult(searchPanel.selectedResult);
+        root.closeSearchPage();
     }
 
     function performSearch(query) {
@@ -77,11 +88,14 @@ KCM.SimpleKCM {
             searchPanel.selectedResult = null;
             searchPanel.selectedIndex = -1;
             resultsList.currentIndex = -1;
+            searchBusy = false;
             return;
         }
 
         var q = query.trim();
         var requestLanguage = searchLanguageForQuery(q);
+        var requestId = ++searchRequestId;
+        searchBusy = true;
         searchResults = [];
         searchPanel.selectedResult = null;
         searchPanel.selectedIndex = -1;
@@ -92,6 +106,9 @@ KCM.SimpleKCM {
         function done() {
             pending -= 1;
             if (pending > 0) {
+                return;
+            }
+            if (requestId !== searchRequestId) {
                 return;
             }
 
@@ -111,6 +128,7 @@ KCM.SimpleKCM {
             }
 
             searchResults = finalList;
+            searchBusy = false;
             searchPanel.selectedResult = null;
             searchPanel.selectedIndex = -1;
             resultsList.currentIndex = -1;
@@ -123,6 +141,9 @@ KCM.SimpleKCM {
             + encodeURIComponent(q);
         openMeteoReq.onreadystatechange = function() {
             if (openMeteoReq.readyState !== XMLHttpRequest.DONE) {
+                return;
+            }
+            if (requestId !== searchRequestId) {
                 return;
             }
             if (openMeteoReq.status === 200) {
@@ -273,7 +294,7 @@ KCM.SimpleKCM {
 
     Timer {
         id: searchDebounce
-        interval: 260
+        interval: 120
         repeat: false
         onTriggered: root.performSearch(searchField.text)
     }
@@ -504,10 +525,15 @@ KCM.SimpleKCM {
                             Layout.fillWidth: true
                             placeholderText: ""
                             selectByMouse: true
-                            onTextEdited: {
+                            onTextChanged: {
                                 searchPanel.selectedResult = null;
                                 searchPanel.selectedIndex = -1;
                                 resultsList.currentIndex = -1;
+                                if (text.trim().length < 2) {
+                                    root.searchResults = [];
+                                    root.searchBusy = false;
+                                    return;
+                                }
                                 searchDebounce.restart();
                             }
                             onAccepted: root.performSearch(text)
@@ -580,8 +606,7 @@ KCM.SimpleKCM {
                                     onDoubleClicked: {
                                         searchPanel.selectedIndex = index;
                                         searchPanel.selectedResult = modelData;
-                                        root.applySearchResult(modelData);
-                                        root.closeSearchPage();
+                                        root.confirmSelectedResult();
                                     }
                                 }
                             }
@@ -589,9 +614,33 @@ KCM.SimpleKCM {
                     }
 
                     Label {
+                        visible: root.searchBusy
                         Layout.alignment: Qt.AlignRight
-                        text: "Double-click a result to apply and return"
+                        text: "Searching…"
                         opacity: 0.72
+                    }
+
+                    Label {
+                        visible: !root.searchBusy && searchField.text.trim().length >= 2 && root.searchResults.length === 0
+                        Layout.alignment: Qt.AlignRight
+                        text: "City not found."
+                        opacity: 0.8
+                    }
+
+                    RowLayout {
+                        Layout.alignment: Qt.AlignRight
+                        spacing: 8
+
+                        Button {
+                            text: "Cancel"
+                            onClicked: root.closeSearchPage()
+                        }
+
+                        Button {
+                            text: "OK"
+                            enabled: searchPanel.selectedResult !== null
+                            onClicked: root.confirmSelectedResult()
+                        }
                     }
                 }
             }
