@@ -28,6 +28,58 @@ KCM.SimpleKCM {
         return cfg_altitudeUnit === "ft" ? "feet" : "meters";
     }
 
+    function containsCyrillic(text) {
+        return text && /[Ѐ-ӿ]/.test(text);
+    }
+
+    function searchLanguageForQuery(query) {
+        var baseLanguage = preferredLanguage && preferredLanguage.length > 0 ? preferredLanguage : "en";
+        if (containsCyrillic(query)) {
+            return "bg";
+        }
+        return baseLanguage;
+    }
+
+    function localizedNameFromNamedetails(namedetails, language) {
+        if (!namedetails) {
+            return "";
+        }
+
+        var preferredKey = "name:" + language;
+        if (namedetails[preferredKey] && namedetails[preferredKey].length > 0) {
+            return namedetails[preferredKey];
+        }
+
+        if (namedetails.name && namedetails.name.length > 0) {
+            return namedetails.name;
+        }
+
+        for (var key in namedetails) {
+            if (key.indexOf("name:") === 0 && containsCyrillic(namedetails[key])) {
+                return namedetails[key];
+            }
+        }
+        return "";
+    }
+
+    function formatResultTitle(item) {
+        if (!item) {
+            return "";
+        }
+        if (item.localizedDisplayName && item.localizedDisplayName.length > 0) {
+            return item.localizedDisplayName;
+        }
+
+        var admin = item.admin1 ? ", " + item.admin1 : "";
+        var country = item.country ? ", " + item.country : "";
+        var firstPart = item.name ? item.name : "";
+        if (firstPart.length > 0) {
+            return firstPart + admin + country;
+        }
+
+        return item.display_name ? item.display_name : "";
+    }
+
     function openSearchPage() {
         searchPanel.selectedResult = null;
         searchPanel.selectedIndex = -1;
@@ -51,7 +103,7 @@ KCM.SimpleKCM {
         }
 
         var q = query.trim();
-        var requestLanguage = preferredLanguage && preferredLanguage.length > 0 ? preferredLanguage : "en";
+        var requestLanguage = searchLanguageForQuery(q);
         var nominatimLanguage = requestLanguage + ",en";
         var collected = [];
         var pending = 2;
@@ -95,6 +147,9 @@ KCM.SimpleKCM {
                 for (var i = 0; i < list.length; ++i) {
                     list[i].provider = "Open-Meteo";
                     list[i].providerKey = "open-meteo";
+                    var openMeteoAdmin = list[i].admin1 ? ", " + list[i].admin1 : "";
+                    var openMeteoCountry = list[i].country ? ", " + list[i].country : "";
+                    list[i].localizedDisplayName = (list[i].name ? list[i].name : "") + openMeteoAdmin + openMeteoCountry;
                     collected.push(list[i]);
                 }
             }
@@ -116,7 +171,7 @@ KCM.SimpleKCM {
                 var items = JSON.parse(nominatimReq.responseText);
                 for (var j = 0; j < items.length; ++j) {
                     var n = items[j];
-                    var localizedName = n.namedetails && n.namedetails.name ? n.namedetails.name : "";
+                    var localizedName = localizedNameFromNamedetails(n.namedetails, requestLanguage);
                     var first = n.display_name ? n.display_name.split(",")[0].trim() : q;
                     if (localizedName && localizedName.length > 0) {
                         first = localizedName;
@@ -133,6 +188,7 @@ KCM.SimpleKCM {
                         longitude: parseFloat(n.lon),
                         timezone: "",
                         display_name: n.display_name ? n.display_name : "",
+                        localizedDisplayName: first + (admin ? ", " + admin : "") + (country ? ", " + country : ""),
                         provider: "Nominatim (OSM)",
                         providerKey: "nominatim"
                     });
@@ -554,14 +610,7 @@ KCM.SimpleKCM {
 
                                     Label {
                                         width: parent.width
-                                        text: {
-                                            if (modelData.display_name && modelData.display_name.length > 0) {
-                                                return modelData.display_name;
-                                            }
-                                            var admin = modelData.admin1 ? ", " + modelData.admin1 : "";
-                                            var country = modelData.country ? ", " + modelData.country : "";
-                                            return modelData.name + admin + country;
-                                        }
+                                        text: root.formatResultTitle(modelData)
                                         color: index === searchPanel.selectedIndex ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
                                         elide: Text.ElideRight
                                     }
