@@ -47,7 +47,7 @@ PlasmoidItem {
             spacing: 6
 
             Kirigami.Icon {
-                visible: hasSelectedTown && Plasmoid.configuration.panelShowWeatherIcon
+                visible: !hasSelectedTown || Plasmoid.configuration.panelShowWeatherIcon
                 source: weatherCodeToIcon(weatherCode)
                 Layout.preferredWidth: Math.max(14, parent.height - 6)
                 Layout.preferredHeight: Math.max(14, parent.height - 6)
@@ -59,7 +59,7 @@ PlasmoidItem {
                 color: Kirigami.Theme.textColor
                 text: {
                     if (!hasSelectedTown) {
-                        return "Set location…";
+                        return "";
                     }
                     var city = (Plasmoid.configuration.locationName || "").split(",")[0].trim();
                     var info = root.panelLineText();
@@ -68,15 +68,6 @@ PlasmoidItem {
             }
         }
 
-        MouseArea {
-            anchors.fill: parent
-            acceptedButtons: Qt.LeftButton
-            onClicked: {
-                if (!hasSelectedTown) {
-                    root.openLocationSettings();
-                }
-            }
-        }
     }
 
     function weatherCodeToText(code) {
@@ -91,6 +82,7 @@ PlasmoidItem {
     }
 
     function weatherCodeToIcon(code) {
+        if (code < 0) return "weather-none-available";
         if (code === 0) return "weather-clear";
         if (code === 1 || code === 2) return "weather-few-clouds";
         if (code === 3) return "weather-overcast";
@@ -490,9 +482,11 @@ PlasmoidItem {
     Rectangle {
         anchors.fill: parent
         radius: 4
-        color: Qt.rgba(0.22, 0.16, 0.10, Math.max(0.2, Math.min(1, Plasmoid.configuration.panelOpacityPercent / 100)))
-        border.color: Qt.rgba(0.80, 0.72, 0.58, 0.9)
-        border.width: 1
+        color: Plasmoid.configuration.transparentBackground
+            ? "transparent"
+            : Qt.rgba(0.22, 0.16, 0.10, Math.max(0.0, Math.min(1, Plasmoid.configuration.panelOpacityPercent / 100)))
+        border.color: Plasmoid.configuration.transparentBackground ? "transparent" : Qt.rgba(0.80, 0.72, 0.58, 0.9)
+        border.width: Plasmoid.configuration.transparentBackground ? 0 : 1
 
         ColumnLayout {
             anchors.fill: parent
