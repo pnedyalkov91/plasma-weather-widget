@@ -6,6 +6,7 @@ import org.kde.kcmutils as KCM
 KCM.SimpleKCM {
     id: root
 
+    property bool cfg_autoDetectLocation: false
     property string cfg_locationName: "London, United Kingdom"
     property real cfg_latitude: 51.5072
     property real cfg_longitude: -0.1276
@@ -92,11 +93,45 @@ KCM.SimpleKCM {
             }
         }
 
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 4
+
+            RadioButton {
+                text: "Automatically detect location"
+                checked: root.cfg_autoDetectLocation
+                onToggled: if (checked) root.cfg_autoDetectLocation = true
+            }
+
+            Label {
+                Layout.fillWidth: true
+                Layout.leftMargin: 24
+                wrapMode: Text.WordWrap
+                text: "Geolocation can be provided by KDE/GeoClue2 depending on system configuration and permissions."
+                opacity: 0.75
+            }
+
+            RowLayout {
+                Layout.leftMargin: 24
+                RadioButton {
+                    text: "Use manual location"
+                    checked: !root.cfg_autoDetectLocation
+                    onToggled: if (checked) root.cfg_autoDetectLocation = false
+                }
+                Label { text: "Latitude:"; opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0 }
+                Label { text: Number(root.cfg_latitude).toFixed(2); opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0 }
+                Label { text: "Longitude:"; opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0 }
+                Label { text: Number(root.cfg_longitude).toFixed(2); opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0 }
+            }
+        }
+
         GridLayout {
             Layout.fillWidth: true
             columns: 4
             columnSpacing: 10
             rowSpacing: 8
+            enabled: !root.cfg_autoDetectLocation
+            opacity: root.cfg_autoDetectLocation ? 0.5 : 1.0
 
             Label { text: "Location name:" }
             TextField {
@@ -107,6 +142,8 @@ KCM.SimpleKCM {
             }
             Button {
                 text: "Change..."
+                visible: !root.cfg_autoDetectLocation
+                enabled: !root.cfg_autoDetectLocation
                 onClicked: {
                     searchField.text = root.cfg_locationName.split(",")[0].trim();
                     root.performSearch(searchField.text);
