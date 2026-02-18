@@ -82,6 +82,10 @@ KCM.SimpleKCM {
 
         var q = query.trim();
         var requestLanguage = searchLanguageForQuery(q);
+        searchResults = [];
+        searchPanel.selectedResult = null;
+        searchPanel.selectedIndex = -1;
+        resultsList.currentIndex = -1;
         var collected = [];
         var pending = 1;
 
@@ -95,6 +99,9 @@ KCM.SimpleKCM {
             var finalList = [];
             for (var i = 0; i < collected.length; ++i) {
                 var item = collected[i];
+                if (item.providerKey && item.providerKey !== "open-meteo") {
+                    continue;
+                }
                 var key = item.name + "|" + Number(item.latitude).toFixed(4) + "|" + Number(item.longitude).toFixed(4);
                 if (dedup[key]) {
                     continue;
