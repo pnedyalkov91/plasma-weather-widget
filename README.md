@@ -30,6 +30,8 @@ plasmashell --replace
 
 ## Recent fixes
 
+- Location search now auto-updates results while typing (debounced), with a compact search field and adjacent Search button.
+- Removed in-panel OK/Cancel controls in the search page; use Back or double-click a result to apply.
 - Refactored the Location page transition to use an action-driven slide workflow (Kirigami `ActionToolBar`) instead of a popup-like mini window.
 - Refactored Location page search UX: `Change...` now opens an in-page animated search panel (no separate dialog window), and location mode radio rows are aligned.
 - Improved auto-detect reliability and UX: auto mode now updates timezone/elevation metadata and keeps form layout stable (no shifted fields).

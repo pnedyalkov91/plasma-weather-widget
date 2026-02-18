@@ -8,6 +8,8 @@ import org.kde.kirigami as Kirigami
 KCM.SimpleKCM {
     id: root
 
+    buttons: KCM.ConfigModule.NoAdditionalButton
+
     property bool cfg_autoDetectLocation: false
     property string cfg_locationName: "London, United Kingdom"
     property real cfg_latitude: 51.5072
@@ -194,6 +196,13 @@ KCM.SimpleKCM {
                 root.autoDetectStatus = "GeoClue2 error while retrieving location.";
             }
         }
+    }
+
+    Timer {
+        id: searchDebounce
+        interval: 260
+        repeat: false
+        onTriggered: root.performSearch(searchField.text)
     }
 
     Item {
@@ -401,12 +410,6 @@ KCM.SimpleKCM {
                                 text: "Back"
                                 icon.name: "go-previous"
                                 onTriggered: root.closeSearchPage()
-                            },
-                            Kirigami.Action {
-                                text: "Search"
-                                icon.name: "edit-find"
-                                enabled: searchField.text.trim().length >= 2
-                                onTriggered: root.performSearch(searchField.text)
                             }
                         ]
                     }
@@ -418,12 +421,33 @@ KCM.SimpleKCM {
                         font.pixelSize: 16
                     }
 
-                    TextField {
-                        id: searchField
+                    RowLayout {
                         Layout.fillWidth: true
-                        placeholderText: "Vienna"
-                        selectByMouse: true
-                        onAccepted: root.performSearch(text)
+                        spacing: 8
+
+                        TextField {
+                            id: searchField
+                            Layout.preferredWidth: Math.min(460, searchPanel.width * 0.72)
+                            Layout.fillWidth: false
+                            placeholderText: "Vienna"
+                            selectByMouse: true
+                            onTextEdited: {
+                                searchPanel.selectedResult = null;
+                                searchPanel.selectedIndex = -1;
+                                resultsList.currentIndex = -1;
+                                searchDebounce.restart();
+                            }
+                            onAccepted: root.performSearch(text)
+                        }
+
+                        Button {
+                            text: "Search"
+                            icon.name: "edit-find"
+                            enabled: searchField.text.trim().length >= 2
+                            onClicked: root.performSearch(searchField.text)
+                        }
+
+                        Item { Layout.fillWidth: true }
                     }
 
                     Label { text: "Results"; font.bold: true; opacity: 0.8 }
@@ -481,24 +505,10 @@ KCM.SimpleKCM {
                         }
                     }
 
-                    RowLayout {
+                    Label {
                         Layout.alignment: Qt.AlignRight
-                        spacing: 8
-                        Button {
-                            text: "OK"
-                            icon.name: "dialog-ok-apply"
-                            enabled: searchPanel.selectedIndex >= 0
-                            highlighted: enabled
-                            onClicked: {
-                                root.applySearchResult(searchPanel.selectedResult);
-                                root.closeSearchPage();
-                            }
-                        }
-                        Button {
-                            text: "Cancel"
-                            icon.name: "dialog-cancel"
-                            onClicked: root.closeSearchPage()
-                        }
+                        text: "Double-click a result to apply and return"
+                        opacity: 0.72
                     }
                 }
             }

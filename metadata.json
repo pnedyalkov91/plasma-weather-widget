@@ -12,7 +12,7 @@
         "Name": "Codex"
       }
     ],
-    "Version": "0.4.9",
+    "Version": "0.5.0",
     "Website": "https://github.com/xfce-mirror/xfce4-weather-plugin"
   },
   "X-Plasma-API-Minimum-Version": "6.0",
