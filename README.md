@@ -27,3 +27,9 @@ kpackagetool6 --type Plasma/Applet --install .
 rm -rf ~/.cache/plasmashell/qmlcache
 plasmashell --replace
 ```
+
+## Recent fixes
+
+- Made the city search input field explicitly visible in dark themes.
+- Added clear row highlight for selected city in search results.
+- Disabled **OK** in the search dialog until a city is selected (Cancel remains available).

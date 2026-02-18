@@ -22,6 +22,7 @@ KCM.SimpleKCM {
     function performSearch(query) {
         if (!query || query.trim().length < 2) {
             searchResults = [];
+            searchDialog.selectedResult = null;
             return;
         }
 
@@ -34,10 +35,13 @@ KCM.SimpleKCM {
             }
             if (req.status !== 200) {
                 searchResults = [];
+                searchDialog.selectedResult = null;
                 return;
             }
             var data = JSON.parse(req.responseText);
             searchResults = data.results ? data.results : [];
+            searchDialog.selectedResult = null;
+            resultsList.currentIndex = -1;
         };
         req.open("GET", endpoint);
         req.send();
@@ -172,12 +176,12 @@ KCM.SimpleKCM {
         modal: true
         width: 620
         height: 540
-        standardButtons: Dialog.Ok | Dialog.Cancel
 
         property var selectedResult: null
 
-        onAccepted: {
-            root.applySearchResult(selectedResult);
+        onOpened: {
+            selectedResult = null;
+            resultsList.currentIndex = -1;
         }
 
         contentItem: ColumnLayout {
@@ -195,6 +199,12 @@ KCM.SimpleKCM {
                     id: searchField
                     Layout.fillWidth: true
                     placeholderText: "Vienna"
+                    selectByMouse: true
+                    background: Rectangle {
+                        radius: 4
+                        color: Qt.rgba(0.10, 0.10, 0.10, 0.35)
+                        border.color: Qt.rgba(0.7, 0.7, 0.7, 0.8)
+                    }
                     onAccepted: root.performSearch(text)
                 }
                 Button {
@@ -224,18 +234,50 @@ KCM.SimpleKCM {
                     delegate: ItemDelegate {
                         required property var modelData
                         required property int index
+
                         width: ListView.view.width
-                        highlighted: searchDialog.selectedResult === modelData
-                        text: {
-                            var admin = modelData.admin1 ? ", " + modelData.admin1 : "";
-                            var country = modelData.country ? ", " + modelData.country : "";
-                            return modelData.name + admin + country;
+                        highlighted: ListView.isCurrentItem
+
+                        background: Rectangle {
+                            color: ListView.isCurrentItem
+                                ? Qt.rgba(0.24, 0.52, 0.91, 0.9)
+                                : "transparent"
                         }
+
+                        contentItem: Label {
+                            text: {
+                                var admin = modelData.admin1 ? ", " + modelData.admin1 : "";
+                                var country = modelData.country ? ", " + modelData.country : "";
+                                return modelData.name + admin + country;
+                            }
+                            color: "white"
+                            elide: Text.ElideRight
+                            verticalAlignment: Text.AlignVCenter
+                        }
+
                         onClicked: {
-                            searchDialog.selectedResult = modelData;
                             resultsList.currentIndex = index;
+                            searchDialog.selectedResult = modelData;
                         }
                     }
+                }
+            }
+        }
+
+        footer: DialogButtonBox {
+            alignment: Qt.AlignRight
+
+            Button {
+                text: "Cancel"
+                onClicked: searchDialog.close()
+            }
+
+            Button {
+                text: "OK"
+                enabled: searchDialog.selectedResult !== null
+                onClicked: {
+                    root.applySearchResult(searchDialog.selectedResult);
+                    searchDialog.close();
                 }
             }
         }
