@@ -22,7 +22,6 @@ KCM.SimpleKCM {
     property bool autoDetectBusy: false
     property string autoDetectStatus: ""
     property string preferredLanguage: Qt.locale().name.split("_")[0]
-    property string selectedProviderName: ""
     readonly property string bundledOpenWeatherApiKey: "8003225e8825db83758c237068447229"
     readonly property string bundledWeatherApiKey: "601ba4ac57404ec29ff120510261802"
     property bool searchBusy: false
@@ -87,9 +86,6 @@ KCM.SimpleKCM {
     }
 
     function currentLocationDisplayName() {
-        if (searchPanel.selectedResult) {
-            return root.formatResultTitle(searchPanel.selectedResult);
-        }
         return root.cfg_locationName && root.cfg_locationName.length > 0 ? root.cfg_locationName : "None Selected";
     }
 
@@ -283,8 +279,7 @@ KCM.SimpleKCM {
             fetchOpenWeather();
             fetchWeatherApi();
         } else if (selectedProvider === "metno") {
-            // met.no does not provide a compatible city-search endpoint here,
-            // so we use Open-Meteo geocoding for location lookup.
+            // met.no location lookup uses Open-Meteo geocoding in this search UI.
             fetchOpenMeteo();
         } else {
             searchBusy = false;
@@ -372,7 +367,6 @@ KCM.SimpleKCM {
         cfg_latitude = item.latitude;
         cfg_longitude = item.longitude;
         cfg_timezone = item.timezone ? item.timezone : cfg_timezone;
-        selectedProviderName = item.provider ? item.provider : selectedProviderName;
         if (item.elevation !== undefined) {
             cfg_altitude = Math.round(item.elevation);
         }
@@ -450,25 +444,6 @@ KCM.SimpleKCM {
                 ColumnLayout {
                     anchors.fill: parent
                     spacing: 10
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        implicitHeight: 74
-                        color: Qt.rgba(0.88, 0.85, 0.80, 0.65)
-                        radius: 3
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.margins: 10
-                            spacing: 10
-                            Label { text: "ℹ"; font.pixelSize: 18 }
-                            Label {
-                                Layout.fillWidth: true
-                                wrapMode: Text.WordWrap
-                                text: "Please change location name to your liking and correct altitude and timezone if they are not auto-detected correctly."
-                            }
-                        }
-                    }
 
                     ButtonGroup { id: locationModeGroup }
 
@@ -652,9 +627,7 @@ KCM.SimpleKCM {
                             Layout.fillWidth: true
                         }
                         Label {
-                            text: "Provider:  " + (searchPanel.selectedResult && searchPanel.selectedResult.provider
-                                ? searchPanel.selectedResult.provider
-                                : root.selectedProviderDisplayName())
+                            text: "Provider:  " + root.selectedProviderDisplayName()
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
