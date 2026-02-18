@@ -413,17 +413,26 @@ PlasmoidItem {
                     spacing: 10
                     visible: !hasSelectedTown
 
+                    Kirigami.Icon {
+                        Layout.alignment: Qt.AlignHCenter
+                        source: "mark-location"
+                        width: 80
+                        height: 80
+                        color: "white"
+                    }
+
                     Label {
                         Layout.fillWidth: true
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap
                         color: "white"
-                        text: "No town selected yet."
+                        font.bold: true
+                        text: "Please set your location"
                     }
 
                     Button {
                         Layout.alignment: Qt.AlignHCenter
-                        text: "Select town"
+                        text: "Set Location..."
                         icon.name: "settings-configure"
                         onClicked: root.openLocationSettings()
                     }
