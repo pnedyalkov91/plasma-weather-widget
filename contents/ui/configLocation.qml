@@ -19,6 +19,8 @@ KCM.SimpleKCM {
     property bool autoDetectBusy: false
     property string autoDetectStatus: ""
 
+    property bool showSearchPanel: false
+
     function displayAltitudeUnit() {
         return cfg_altitudeUnit === "ft" ? "feet" : "meters";
     }
@@ -26,8 +28,8 @@ KCM.SimpleKCM {
     function performSearch(query) {
         if (!query || query.trim().length < 2) {
             searchResults = [];
-            searchDialog.selectedResult = null;
-            searchDialog.selectedIndex = -1;
+            searchPanel.selectedResult = null;
+            searchPanel.selectedIndex = -1;
             return;
         }
 
@@ -40,14 +42,14 @@ KCM.SimpleKCM {
             }
             if (req.status !== 200) {
                 searchResults = [];
-                searchDialog.selectedResult = null;
-                searchDialog.selectedIndex = -1;
+                searchPanel.selectedResult = null;
+                searchPanel.selectedIndex = -1;
                 return;
             }
             var data = JSON.parse(req.responseText);
             searchResults = data.results ? data.results : [];
-            searchDialog.selectedResult = null;
-            searchDialog.selectedIndex = -1;
+            searchPanel.selectedResult = null;
+            searchPanel.selectedIndex = -1;
             resultsList.currentIndex = -1;
         };
         req.open("GET", endpoint);
@@ -55,7 +57,6 @@ KCM.SimpleKCM {
     }
 
     function reverseGeocode(lat, lon) {
-        // 1) Fetch timezone/elevation from Open-Meteo forecast metadata.
         var metaReq = new XMLHttpRequest();
         var metaEndpoint = "https://api.open-meteo.com/v1/forecast?latitude="
             + encodeURIComponent(lat)
@@ -70,18 +71,13 @@ KCM.SimpleKCM {
 
             if (metaReq.status === 200) {
                 var meta = JSON.parse(metaReq.responseText);
-                if (meta.timezone) {
-                    cfg_timezone = meta.timezone;
-                }
-                if (meta.elevation !== undefined && !isNaN(meta.elevation)) {
-                    cfg_altitude = Math.round(meta.elevation);
-                }
+                if (meta.timezone) cfg_timezone = meta.timezone;
+                if (meta.elevation !== undefined && !isNaN(meta.elevation)) cfg_altitude = Math.round(meta.elevation);
             }
         };
         metaReq.open("GET", metaEndpoint);
         metaReq.send();
 
-        // 2) Try reverse geocoding for a human-readable city/country.
         var req = new XMLHttpRequest();
         var endpoint = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1&lat="
             + encodeURIComponent(lat)
@@ -100,9 +96,7 @@ KCM.SimpleKCM {
                     var city = a.city || a.town || a.village || a.municipality || a.county || "";
                     var country = a.country || "";
                     if (city.length > 0 || country.length > 0) {
-                        cfg_locationName = city.length > 0 && country.length > 0
-                            ? (city + ", " + country)
-                            : (city + country);
+                        cfg_locationName = city.length > 0 && country.length > 0 ? (city + ", " + country) : (city + country);
                     }
                 }
                 autoDetectStatus = "Auto-detected via GeoClue2.";
@@ -116,13 +110,11 @@ KCM.SimpleKCM {
         req.send();
     }
 
-
     function refreshAutoDetectedLocation() {
         if (!cfg_autoDetectLocation) {
             autoDetectBusy = false;
             return;
         }
-
         autoDetectBusy = true;
         autoDetectStatus = "Requesting location from GeoClue2…";
 
@@ -131,22 +123,16 @@ KCM.SimpleKCM {
             autoDetectStatus = "GeoClue2 location unavailable on this system.";
             return;
         }
-
         positionSource.update();
     }
 
     function applySearchResult(item) {
-        if (!item) {
-            return;
-        }
-
+        if (!item) return;
         cfg_locationName = item.name + ", " + (item.country ? item.country : "");
         cfg_latitude = item.latitude;
         cfg_longitude = item.longitude;
         cfg_timezone = item.timezone ? item.timezone : cfg_timezone;
-        if (item.elevation !== undefined) {
-            cfg_altitude = Math.round(item.elevation);
-        }
+        if (item.elevation !== undefined) cfg_altitude = Math.round(item.elevation);
     }
 
     onCfg_autoDetectLocationChanged: {
@@ -164,10 +150,7 @@ KCM.SimpleKCM {
         updateInterval: 300000
 
         onPositionChanged: {
-            if (!root.cfg_autoDetectLocation) {
-                return;
-            }
-
+            if (!root.cfg_autoDetectLocation) return;
             var c = position.coordinate;
             if (!c || !c.isValid) {
                 root.autoDetectBusy = false;
@@ -177,10 +160,7 @@ KCM.SimpleKCM {
 
             root.cfg_latitude = c.latitude;
             root.cfg_longitude = c.longitude;
-            if (!isNaN(c.altitude)) {
-                root.cfg_altitude = Math.round(c.altitude);
-            }
-
+            if (!isNaN(c.altitude)) root.cfg_altitude = Math.round(c.altitude);
             root.reverseGeocode(c.latitude, c.longitude);
         }
 
@@ -206,12 +186,7 @@ KCM.SimpleKCM {
                 anchors.fill: parent
                 anchors.margins: 10
                 spacing: 10
-
-                Label {
-                    text: "ℹ"
-                    font.pixelSize: 18
-                }
-
+                Label { text: "ℹ"; font.pixelSize: 18 }
                 Label {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
@@ -220,46 +195,58 @@ KCM.SimpleKCM {
             }
         }
 
-        ButtonGroup {
-            id: locationModeGroup
-        }
+        ButtonGroup { id: locationModeGroup }
 
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 4
 
-            RadioButton {
-                text: "Automatically detect location"
-                checked: root.cfg_autoDetectLocation
-                ButtonGroup.group: locationModeGroup
-                onClicked: root.cfg_autoDetectLocation = true
+            RowLayout {
+                Layout.fillWidth: true
+                RadioButton {
+                    text: "Automatically detect location"
+                    checked: root.cfg_autoDetectLocation
+                    ButtonGroup.group: locationModeGroup
+                    onClicked: root.cfg_autoDetectLocation = true
+                }
             }
 
             RowLayout {
+                Layout.fillWidth: true
                 Layout.leftMargin: 24
                 spacing: 8
                 Label {
-                    text: root.autoDetectBusy ? "Detecting…" : (root.autoDetectStatus.length > 0 ? root.autoDetectStatus : "GeoLocation can be provided by KDE/GeoClue2 depending on system configuration and permissions.")
-                    opacity: 0.78
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
+                    opacity: 0.78
+                    text: root.autoDetectBusy
+                        ? "Detecting…"
+                        : (root.autoDetectStatus.length > 0
+                            ? root.autoDetectStatus
+                            : "GeoLocation can be provided by KDE/GeoClue2 depending on system configuration and permissions.")
                 }
                 Button {
                     text: "Refresh"
-                    enabled: root.cfg_autoDetectLocation && !root.autoDetectBusy
                     visible: root.cfg_autoDetectLocation
+                    enabled: root.cfg_autoDetectLocation && !root.autoDetectBusy
                     onClicked: root.refreshAutoDetectedLocation()
                 }
             }
 
             RowLayout {
-                Layout.leftMargin: 24
+                Layout.fillWidth: true
                 RadioButton {
                     text: "Use manual location"
                     checked: !root.cfg_autoDetectLocation
                     ButtonGroup.group: locationModeGroup
                     onClicked: root.cfg_autoDetectLocation = false
                 }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.leftMargin: 24
+                spacing: 8
                 Label { text: "Latitude:"; opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0 }
                 Label { text: Number(root.cfg_latitude).toFixed(2); opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0 }
                 Label { text: "Longitude:"; opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0 }
@@ -284,13 +271,12 @@ KCM.SimpleKCM {
             }
             Button {
                 text: "Change..."
-                visible: true
                 enabled: !root.cfg_autoDetectLocation
                 opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0
                 onClicked: {
                     searchField.text = root.cfg_locationName.split(",")[0].trim();
                     root.performSearch(searchField.text);
-                    searchDialog.open();
+                    root.showSearchPanel = true;
                 }
             }
 
@@ -353,24 +339,49 @@ KCM.SimpleKCM {
         Item { Layout.fillHeight: true }
     }
 
-    Dialog {
-        id: searchDialog
-        title: "Search location"
-        modal: true
-        width: 620
-        height: 540
+    Rectangle {
+        id: dimmer
+        anchors.fill: parent
+        color: Qt.rgba(0, 0, 0, 0.35)
+        visible: root.showSearchPanel
+        opacity: root.showSearchPanel ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: 170; easing.type: Easing.OutCubic } }
+        z: 50
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.showSearchPanel = false
+        }
+    }
+
+    Rectangle {
+        id: searchPanel
+        anchors.centerIn: parent
+        width: Math.min(root.width - 24, 640)
+        height: Math.min(root.height - 24, 500)
+        radius: 6
+        color: Qt.rgba(0.22, 0.22, 0.24, 0.97)
+        border.color: Qt.rgba(0.6, 0.6, 0.6, 0.8)
+        z: 60
 
         property var selectedResult: null
         property int selectedIndex: -1
 
-        onOpened: {
-            selectedResult = null;
-            selectedIndex = -1;
-            resultsList.currentIndex = -1;
-        }
+        visible: root.showSearchPanel
+        opacity: root.showSearchPanel ? 1 : 0
+        scale: root.showSearchPanel ? 1 : 0.96
+        Behavior on opacity { NumberAnimation { duration: 170; easing.type: Easing.OutCubic } }
+        Behavior on scale { NumberAnimation { duration: 170; easing.type: Easing.OutCubic } }
 
-        contentItem: ColumnLayout {
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 12
             spacing: 8
+
+            RowLayout {
+                Layout.fillWidth: true
+                Label { text: "Search location"; font.pixelSize: 34/2; font.bold: true; Layout.fillWidth: true }
+                ToolButton { text: "✕"; onClicked: root.showSearchPanel = false }
+            }
 
             Label {
                 Layout.fillWidth: true
@@ -400,11 +411,7 @@ KCM.SimpleKCM {
                 }
             }
 
-            Label {
-                text: "Results"
-                font.bold: true
-                opacity: 0.8
-            }
+            Label { text: "Results"; font.bold: true; opacity: 0.8 }
 
             Rectangle {
                 Layout.fillWidth: true
@@ -417,7 +424,7 @@ KCM.SimpleKCM {
                     anchors.fill: parent
                     clip: true
                     model: root.searchResults
-                    currentIndex: searchDialog.selectedIndex
+                    currentIndex: searchPanel.selectedIndex
 
                     delegate: Rectangle {
                         required property var modelData
@@ -425,7 +432,7 @@ KCM.SimpleKCM {
 
                         width: ListView.view.width
                         height: 34
-                        color: index === searchDialog.selectedIndex
+                        color: index === searchPanel.selectedIndex
                             ? Qt.rgba(0.24, 0.52, 0.91, 0.9)
                             : "transparent"
 
@@ -446,39 +453,38 @@ KCM.SimpleKCM {
                         MouseArea {
                             anchors.fill: parent
                             onClicked: {
-                                searchDialog.selectedIndex = index;
-                                searchDialog.selectedResult = modelData;
+                                searchPanel.selectedIndex = index;
+                                searchPanel.selectedResult = modelData;
                                 resultsList.currentIndex = index;
                             }
                             onDoubleClicked: {
-                                searchDialog.selectedIndex = index;
-                                searchDialog.selectedResult = modelData;
+                                searchPanel.selectedIndex = index;
+                                searchPanel.selectedResult = modelData;
                                 root.applySearchResult(modelData);
-                                searchDialog.close();
+                                root.showSearchPanel = false;
                             }
                         }
                     }
                 }
             }
-        }
 
-        footer: DialogButtonBox {
-            alignment: Qt.AlignRight
-
-            Button {
-                text: "OK"
-                icon.name: "dialog-ok-apply"
-                enabled: searchDialog.selectedIndex >= 0
-                onClicked: {
-                    root.applySearchResult(searchDialog.selectedResult);
-                    searchDialog.close();
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                spacing: 8
+                Button {
+                    text: "OK"
+                    icon.name: "dialog-ok-apply"
+                    enabled: searchPanel.selectedIndex >= 0
+                    onClicked: {
+                        root.applySearchResult(searchPanel.selectedResult);
+                        root.showSearchPanel = false;
+                    }
                 }
-            }
-
-            Button {
-                text: "Cancel"
-                icon.name: "dialog-cancel"
-                onClicked: searchDialog.close()
+                Button {
+                    text: "Cancel"
+                    icon.name: "dialog-cancel"
+                    onClicked: root.showSearchPanel = false
+                }
             }
         }
     }
