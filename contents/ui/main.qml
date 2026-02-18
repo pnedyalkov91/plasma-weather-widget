@@ -29,9 +29,13 @@ PlasmoidItem {
     property int panelScrollIndex: 0
     property string updateText: ""
     readonly property bool hasSelectedTown: (Plasmoid.configuration.locationName || "").trim().length > 0
-    readonly property bool isPanelFormFactor: Plasmoid.formFactor === PlasmaCore.Types.Horizontal || Plasmoid.formFactor === PlasmaCore.Types.Vertical
+    readonly property bool isPanelFormFactor: (Plasmoid.formFactor === PlasmaCore.Types.Horizontal
+        || Plasmoid.formFactor === PlasmaCore.Types.Vertical
+        || Plasmoid.location !== PlasmaCore.Types.Floating)
     readonly property string bundledOpenWeatherApiKey: "8003225e8825db83758c237068447229"
     readonly property string bundledWeatherApiKey: "601ba4ac57404ec29ff120510261802"
+
+    Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
 
     function openLocationSettings() {
         var action = Plasmoid.internalAction("configure");
