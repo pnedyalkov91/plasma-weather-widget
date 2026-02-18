@@ -30,6 +30,7 @@ plasmashell --replace
 
 ## Recent fixes
 
+- Refactored the Location page transition to use an action-driven slide workflow (Kirigami `ActionToolBar`) instead of a popup-like mini window.
 - Refactored Location page search UX: `Change...` now opens an in-page animated search panel (no separate dialog window), and location mode radio rows are aligned.
 - Improved auto-detect reliability and UX: auto mode now updates timezone/elevation metadata and keeps form layout stable (no shifted fields).
 - Implemented auto-detect mode updates: when enabled, coordinates are fetched from GeoClue2 (`QtPositioning`) and location name/timezone are reverse-geocoded automatically.
