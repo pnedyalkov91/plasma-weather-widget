@@ -30,6 +30,7 @@ plasmashell --replace
 
 ## Recent fixes
 
+- Removed hardcoded default city values (location/timezone/coordinates now start empty/zero for a clean first-time setup).
 - Fixed Plasma compatibility issue in Location page by removing unsupported `buttons` property assignment from `KCM.SimpleKCM`.
 - Location search now auto-updates results while typing (debounced), with a compact search field and adjacent Search button.
 - Removed in-panel OK/Cancel controls in the search page; use Back or double-click a result to apply.

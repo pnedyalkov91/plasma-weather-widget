@@ -10,11 +10,11 @@ KCM.SimpleKCM {
 
 
     property bool cfg_autoDetectLocation: false
-    property string cfg_locationName: "London, United Kingdom"
-    property real cfg_latitude: 51.5072
-    property real cfg_longitude: -0.1276
-    property int cfg_altitude: 35
-    property string cfg_timezone: "Europe/London"
+    property string cfg_locationName: ""
+    property real cfg_latitude: 0.0
+    property real cfg_longitude: 0.0
+    property int cfg_altitude: 0
+    property string cfg_timezone: ""
     property string cfg_altitudeUnit: "m"
 
     property var searchResults: []
@@ -401,23 +401,23 @@ KCM.SimpleKCM {
                     anchors.fill: parent
                     spacing: 8
 
-                    Kirigami.ActionToolBar {
+                    RowLayout {
                         Layout.fillWidth: true
-                        display: ButtonTextBesideIcon
-                        actions: [
-                            Kirigami.Action {
-                                text: "Back"
-                                icon.name: "go-previous"
-                                onTriggered: root.closeSearchPage()
-                            }
-                        ]
-                    }
+                        spacing: 8
 
-                    Label {
-                        Layout.fillWidth: true
-                        text: "Search location"
-                        font.bold: true
-                        font.pixelSize: 16
+                        ToolButton {
+                            icon.name: "go-previous"
+                            text: ""
+                            onClicked: root.closeSearchPage()
+                        }
+
+                        Label {
+                            text: "Search location"
+                            font.bold: true
+                            font.pixelSize: 16
+                        }
+
+                        Item { Layout.fillWidth: true }
                     }
 
                     RowLayout {
@@ -426,9 +426,9 @@ KCM.SimpleKCM {
 
                         TextField {
                             id: searchField
-                            Layout.preferredWidth: Math.min(460, searchPanel.width * 0.72)
-                            Layout.fillWidth: false
-                            placeholderText: "Vienna"
+                            Layout.preferredWidth: Math.min(460, searchPanel.width * 2.72)
+                            Layout.fillWidth: true
+                            placeholderText: ""
                             selectByMouse: true
                             onTextEdited: {
                                 searchPanel.selectedResult = null;
