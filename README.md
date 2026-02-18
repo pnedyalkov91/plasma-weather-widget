@@ -30,6 +30,8 @@ plasmashell --replace
 
 ## Recent fixes
 
+- Default location mode is now **Automatically detect location**.
+- Main widget now shows an empty-state with a **Select town** button when no location is configured.
 - Removed hardcoded default city values (location/timezone/coordinates now start empty/zero for a clean first-time setup).
 - Fixed Plasma compatibility issue in Location page by removing unsupported `buttons` property assignment from `KCM.SimpleKCM`.
 - Location search now auto-updates results while typing (debounced), with a compact search field and adjacent Search button.

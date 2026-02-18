@@ -22,6 +22,14 @@ PlasmoidItem {
     property var dailyData: []
     property int scrollIndex: 0
     property string updateText: ""
+    readonly property bool hasSelectedTown: (Plasmoid.configuration.locationName || "").trim().length > 0
+
+    function openLocationSettings() {
+        var action = Plasmoid.internalAction("configure");
+        if (action) {
+            action.trigger();
+        }
+    }
 
     function weatherCodeToText(code) {
         if (code === 0) return "Sunny";
@@ -69,6 +77,21 @@ PlasmoidItem {
     }
 
     function refreshNow() {
+        if (!hasSelectedTown) {
+            loading = false;
+            updateText = "";
+            temperatureC = NaN;
+            apparentC = NaN;
+            windKmh = NaN;
+            pressureHpa = NaN;
+            humidityPercent = NaN;
+            visibilityKm = NaN;
+            dewPointC = NaN;
+            weatherCode = -1;
+            dailyData = [];
+            return;
+        }
+
         loading = true;
         var request = new XMLHttpRequest();
         var endpoint = "https://api.open-meteo.com/v1/forecast?latitude=" + Plasmoid.configuration.latitude
@@ -136,6 +159,7 @@ PlasmoidItem {
 
     Connections {
         target: Plasmoid.configuration
+        function onLocationNameChanged() { refreshNow(); }
         function onLatitudeChanged() { refreshNow(); }
         function onLongitudeChanged() { refreshNow(); }
         function onTimezoneChanged() { refreshNow(); }
@@ -173,125 +197,158 @@ PlasmoidItem {
 
             Label {
                 Layout.fillWidth: true
-                text: Plasmoid.configuration.locationName
+                text: hasSelectedTown ? Plasmoid.configuration.locationName : ""
                 horizontalAlignment: Text.AlignHCenter
                 color: "white"
                 font.bold: true
             }
 
-            Rectangle {
-                visible: Plasmoid.configuration.showScrollbox
-                Layout.fillWidth: true
-                Layout.preferredHeight: 24 * Math.max(1, Plasmoid.configuration.scrollboxLines)
-                color: Qt.rgba(0.12, 0.12, 0.12, 0.45)
-                border.color: Qt.rgba(0.80, 0.72, 0.58, 0.7)
-
-                Column {
-                    anchors.fill: parent
-                    anchors.margins: 4
-                    Repeater {
-                        model: Math.max(1, Plasmoid.configuration.scrollboxLines)
-                        delegate: Label {
-                            required property int index
-                            text: {
-                                var lines = root.scrollLines();
-                                return lines.length === 0 ? "" : root.scrollLineText(lines[(root.scrollIndex + index) % lines.length]);
-                            }
-                            color: "white"
-                        }
-                    }
-                }
-            }
-
-            RowLayout {
+            Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: 6
 
-                Rectangle {
-                    Layout.preferredWidth: Math.max(140, root.width * 0.28)
-                    Layout.fillHeight: true
-                    color: Qt.rgba(0.25, 0.19, 0.13, 0.45)
-                    border.color: Qt.rgba(0.80, 0.72, 0.58, 0.65)
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width, 320)
+                    spacing: 10
+                    visible: !hasSelectedTown
 
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 6
-                        spacing: 4
-                        Label { text: Qt.formatTime(new Date(), "HH:mm"); color: "white"; font.bold: true }
-                        Kirigami.Icon {
-                            source: weatherCodeToIcon(weatherCode)
-                            Layout.alignment: Qt.AlignHCenter
-                            Layout.preferredWidth: 72
-                            Layout.preferredHeight: 72
-                        }
-                        Label { text: weatherCodeToText(weatherCode); color: "white"; Layout.alignment: Qt.AlignHCenter }
-                        Item { Layout.fillHeight: true }
-                        Label { text: loading ? "Updating..." : updateText; color: "#d7d7d7"; font.pixelSize: 10 }
+                    Label {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        color: "white"
+                        text: "No town selected yet."
+                    }
+
+                    Button {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: "Select town"
+                        icon.name: "settings-configure"
+                        onClicked: root.openLocationSettings()
                     }
                 }
 
                 ColumnLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
+                    anchors.fill: parent
                     spacing: 6
+                    visible: hasSelectedTown
 
                     Rectangle {
+                        visible: Plasmoid.configuration.showScrollbox
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Math.max(92, root.height * 0.35)
-                        color: Qt.rgba(0.25, 0.19, 0.13, 0.45)
-                        border.color: Qt.rgba(0.80, 0.72, 0.58, 0.65)
+                        Layout.preferredHeight: 24 * Math.max(1, Plasmoid.configuration.scrollboxLines)
+                        color: Qt.rgba(0.12, 0.12, 0.12, 0.45)
+                        border.color: Qt.rgba(0.80, 0.72, 0.58, 0.7)
 
-                        RowLayout {
+                        Column {
                             anchors.fill: parent
-                            anchors.margins: 6
-                            spacing: 10
-
-                            Label {
-                                text: tempValue(temperatureC)
-                                color: "white"
-                                font.pixelSize: Math.max(28, Math.min(54, root.width * 0.11))
-                                font.bold: true
-                            }
-
-                            Column {
-                                spacing: 3
-                                Label { text: "Wind: " + windValue(windKmh); color: "white" }
-                                Label { text: "Feels like: " + tempValue(apparentC); color: "white" }
-                                Label { text: "Humidity: " + (isNaN(humidityPercent) ? "--" : Math.round(humidityPercent) + "%"); color: "white" }
-                                Label { text: "Pressure: " + pressureValue(pressureHpa); color: "white" }
+                            anchors.margins: 4
+                            Repeater {
+                                model: Math.max(1, Plasmoid.configuration.scrollboxLines)
+                                delegate: Label {
+                                    required property int index
+                                    text: {
+                                        var lines = root.scrollLines();
+                                        return lines.length === 0 ? "" : root.scrollLineText(lines[(root.scrollIndex + index) % lines.length]);
+                                    }
+                                    color: "white"
+                                }
                             }
                         }
                     }
 
-                    Flow {
-                        id: forecastFlow
+                    RowLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        spacing: 4
+                        spacing: 6
 
-                        Repeater {
-                            model: dailyData
-                            delegate: Rectangle {
-                                required property var modelData
-                                width: Math.max(88, (forecastFlow.width - (forecastFlow.spacing * 4)) / 5)
-                                height: Math.max(90, forecastFlow.height / 2 - 4)
+                        Rectangle {
+                            Layout.preferredWidth: Math.max(140, root.width * 0.28)
+                            Layout.fillHeight: true
+                            color: Qt.rgba(0.25, 0.19, 0.13, 0.45)
+                            border.color: Qt.rgba(0.80, 0.72, 0.58, 0.65)
+
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: 6
+                                spacing: 4
+                                Label { text: Qt.formatTime(new Date(), "HH:mm"); color: "white"; font.bold: true }
+                                Kirigami.Icon {
+                                    source: weatherCodeToIcon(weatherCode)
+                                    Layout.alignment: Qt.AlignHCenter
+                                    Layout.preferredWidth: 72
+                                    Layout.preferredHeight: 72
+                                }
+                                Label { text: weatherCodeToText(weatherCode); color: "white"; Layout.alignment: Qt.AlignHCenter }
+                                Item { Layout.fillHeight: true }
+                                Label { text: loading ? "Updating..." : updateText; color: "#d7d7d7"; font.pixelSize: 10 }
+                            }
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            spacing: 6
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Math.max(92, root.height * 0.35)
                                 color: Qt.rgba(0.25, 0.19, 0.13, 0.45)
                                 border.color: Qt.rgba(0.80, 0.72, 0.58, 0.65)
 
-                                Column {
+                                RowLayout {
                                     anchors.fill: parent
-                                    anchors.margins: 4
-                                    spacing: 1
-                                    Label { text: modelData.day; color: "white"; font.bold: true }
-                                    Label { text: tempValue(modelData.maxC) + " / " + tempValue(modelData.minC); color: "#e8e8e8" }
-                                    Kirigami.Icon { source: weatherCodeToIcon(modelData.code); width: 24; height: 24 }
+                                    anchors.margins: 6
+                                    spacing: 10
+
                                     Label {
-                                        text: weatherCodeToText(modelData.code)
-                                        color: "#f0f0f0"
-                                        font.pixelSize: 10
-                                        elide: Text.ElideRight
-                                        width: parent.width
+                                        text: tempValue(temperatureC)
+                                        color: "white"
+                                        font.pixelSize: Math.max(28, Math.min(54, root.width * 0.11))
+                                        font.bold: true
+                                    }
+
+                                    Column {
+                                        spacing: 3
+                                        Label { text: "Wind: " + windValue(windKmh); color: "white" }
+                                        Label { text: "Feels like: " + tempValue(apparentC); color: "white" }
+                                        Label { text: "Humidity: " + (isNaN(humidityPercent) ? "--" : Math.round(humidityPercent) + "%"); color: "white" }
+                                        Label { text: "Pressure: " + pressureValue(pressureHpa); color: "white" }
+                                    }
+                                }
+                            }
+
+                            Flow {
+                                id: forecastFlow
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                spacing: 4
+
+                                Repeater {
+                                    model: dailyData
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        width: Math.max(88, (forecastFlow.width - (forecastFlow.spacing * 4)) / 5)
+                                        height: Math.max(90, forecastFlow.height / 2 - 4)
+                                        color: Qt.rgba(0.25, 0.19, 0.13, 0.45)
+                                        border.color: Qt.rgba(0.80, 0.72, 0.58, 0.65)
+
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 4
+                                            spacing: 1
+                                            Label { text: modelData.day; color: "white"; font.bold: true }
+                                            Label { text: tempValue(modelData.maxC) + " / " + tempValue(modelData.minC); color: "#e8e8e8" }
+                                            Kirigami.Icon { source: weatherCodeToIcon(modelData.code); width: 24; height: 24 }
+                                            Label {
+                                                text: weatherCodeToText(modelData.code)
+                                                color: "#f0f0f0"
+                                                font.pixelSize: 10
+                                                elide: Text.ElideRight
+                                                width: parent.width
+                                            }
+                                        }
                                     }
                                 }
                             }

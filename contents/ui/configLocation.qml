@@ -9,7 +9,7 @@ KCM.SimpleKCM {
     id: root
 
 
-    property bool cfg_autoDetectLocation: false
+    property bool cfg_autoDetectLocation: true
     property string cfg_locationName: ""
     property real cfg_latitude: 0.0
     property real cfg_longitude: 0.0
