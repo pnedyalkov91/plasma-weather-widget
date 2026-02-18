@@ -97,8 +97,9 @@ KCM.SimpleKCM {
         searchPanel.selectedResult = null;
         searchPanel.selectedIndex = -1;
         resultsList.currentIndex = -1;
-        searchField.text = root.cfg_locationName.split(",")[0].trim();
-        root.performSearch(searchField.text);
+        searchField.text = "";
+        searchResults = [];
+        searchBusy = false;
         root.pageIndex = 1;
     }
 
@@ -282,12 +283,9 @@ KCM.SimpleKCM {
             fetchOpenWeather();
             fetchWeatherApi();
         } else if (selectedProvider === "metno") {
-            // met.no does not provide a compatible city-search endpoint here.
-            searchBusy = false;
-            searchResults = [];
-            searchPanel.selectedResult = null;
-            searchPanel.selectedIndex = -1;
-            resultsList.currentIndex = -1;
+            // met.no does not provide a compatible city-search endpoint here,
+            // so we use Open-Meteo geocoding for location lookup.
+            fetchOpenMeteo();
         } else {
             searchBusy = false;
         }
@@ -707,6 +705,10 @@ KCM.SimpleKCM {
                             model: root.searchResults
                             currentIndex: searchPanel.selectedIndex
                             visible: root.searchResults.length > 0
+                            ScrollBar.vertical: ScrollBar {
+                                policy: ScrollBar.AsNeeded
+                                active: resultsList.moving || hovered
+                            }
 
                             delegate: Rectangle {
                                 required property var modelData
