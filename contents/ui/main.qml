@@ -22,6 +22,16 @@ PlasmoidItem {
     property var dailyData: []
     property int scrollIndex: 0
     property string updateText: ""
+    readonly property bool hasSelectedTown: (Plasmoid.configuration.locationName || "").trim().length > 0
+    readonly property string bundledOpenWeatherApiKey: "8003225e8825db83758c237068447229"
+    readonly property string bundledWeatherApiKey: "601ba4ac57404ec29ff120510261802"
+
+    function openLocationSettings() {
+        var action = Plasmoid.internalAction("configure");
+        if (action) {
+            action.trigger();
+        }
+    }
 
     function weatherCodeToText(code) {
         if (code === 0) return "Sunny";
@@ -43,6 +53,39 @@ PlasmoidItem {
         if (code === 71 || code === 73 || code === 75) return "weather-snow";
         if (code === 95 || code === 96 || code === 99) return "weather-storm";
         return "weather-few-clouds";
+    }
+
+    function openWeatherCodeToWmo(code) {
+        if (code >= 200 && code < 300) return 95;
+        if (code >= 300 && code < 600) return 63;
+        if (code >= 600 && code < 700) return 73;
+        if (code >= 700 && code < 800) return 45;
+        if (code === 800) return 0;
+        if (code === 801 || code === 802) return 2;
+        if (code === 803 || code === 804) return 3;
+        return 2;
+    }
+
+    function metNoSymbolToWmo(symbolCode) {
+        if (!symbolCode) return 2;
+        if (symbolCode.indexOf("thunder") >= 0) return 95;
+        if (symbolCode.indexOf("snow") >= 0 || symbolCode.indexOf("sleet") >= 0) return 73;
+        if (symbolCode.indexOf("rain") >= 0 || symbolCode.indexOf("drizzle") >= 0) return 63;
+        if (symbolCode.indexOf("fog") >= 0) return 45;
+        if (symbolCode.indexOf("clearsky") >= 0) return 0;
+        if (symbolCode.indexOf("cloudy") >= 0) return 3;
+        return 2;
+    }
+
+    function weatherApiCodeToWmo(code) {
+        if (code >= 1273) return 95;
+        if (code >= 1114 && code <= 1237) return 73;
+        if ((code >= 1063 && code <= 1201) || (code >= 1240 && code <= 1246)) return 63;
+        if (code === 1000) return 0;
+        if (code === 1003) return 2;
+        if (code === 1006 || code === 1009) return 3;
+        if (code === 1030 || code === 1135 || code === 1147) return 45;
+        return 2;
     }
 
     function tempValue(celsius) {
@@ -69,52 +112,231 @@ PlasmoidItem {
     }
 
     function refreshNow() {
-        loading = true;
-        var request = new XMLHttpRequest();
-        var endpoint = "https://api.open-meteo.com/v1/forecast?latitude=" + Plasmoid.configuration.latitude
-            + "&longitude=" + Plasmoid.configuration.longitude
-            + "&timezone=" + encodeURIComponent(Plasmoid.configuration.timezone)
-            + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,surface_pressure,dew_point_2m,visibility"
-            + "&daily=weather_code,temperature_2m_max,temperature_2m_min";
-
-        request.onreadystatechange = function() {
-            if (request.readyState !== XMLHttpRequest.DONE) return;
+        if (!hasSelectedTown) {
             loading = false;
-            if (request.status !== 200) {
-                updateText = "Update failed";
+            updateText = "";
+            temperatureC = NaN;
+            apparentC = NaN;
+            windKmh = NaN;
+            pressureHpa = NaN;
+            humidityPercent = NaN;
+            visibilityKm = NaN;
+            dewPointC = NaN;
+            weatherCode = -1;
+            dailyData = [];
+            return;
+        }
+
+        loading = true;
+
+        var selectedProvider = Plasmoid.configuration.weatherProvider || "adaptive";
+        var providerChain = [];
+        if (selectedProvider === "adaptive") {
+            providerChain = ["openMeteo", "openWeather", "weatherApi", "metno"];
+        } else {
+            providerChain = [selectedProvider];
+        }
+
+        function tryProvider(index) {
+            if (index >= providerChain.length) {
+                loading = false;
+                updateText = "All providers failed";
                 return;
             }
 
-            var data = JSON.parse(request.responseText);
-            if (!data.current) return;
+            var provider = providerChain[index];
 
-            temperatureC = data.current.temperature_2m;
-            apparentC = data.current.apparent_temperature;
-            humidityPercent = data.current.relative_humidity_2m;
-            windKmh = data.current.wind_speed_10m;
-            pressureHpa = data.current.surface_pressure;
-            dewPointC = data.current.dew_point_2m;
-            visibilityKm = data.current.visibility / 1000.0;
-            weatherCode = data.current.weather_code;
+            if (provider === "openWeather") {
+                var owReq = new XMLHttpRequest();
+                var owEndpoint = "https://api.openweathermap.org/data/2.5/weather?lat=" + Plasmoid.configuration.latitude
+                    + "&lon=" + Plasmoid.configuration.longitude
+                    + "&units=metric&appid=" + encodeURIComponent(bundledOpenWeatherApiKey);
 
-            dailyData = [];
-            if (data.daily && data.daily.time) {
-                var maxDays = Math.min(Plasmoid.configuration.forecastDays, data.daily.time.length);
-                for (var i = 0; i < maxDays; ++i) {
-                    dailyData.push({
-                        day: Qt.formatDate(new Date(data.daily.time[i]), "ddd"),
-                        maxC: data.daily.temperature_2m_max[i],
-                        minC: data.daily.temperature_2m_min[i],
-                        code: data.daily.weather_code[i]
-                    });
-                }
+                owReq.onreadystatechange = function() {
+                    if (owReq.readyState !== XMLHttpRequest.DONE) return;
+                    if (owReq.status !== 200) {
+                        tryProvider(index + 1);
+                        return;
+                    }
+
+                    var data = JSON.parse(owReq.responseText);
+                    if (!data.main) {
+                        tryProvider(index + 1);
+                        return;
+                    }
+
+                    temperatureC = data.main.temp;
+                    apparentC = data.main.feels_like;
+                    humidityPercent = data.main.humidity;
+                    pressureHpa = data.main.pressure;
+                    windKmh = data.wind && data.wind.speed !== undefined ? data.wind.speed * 3.6 : NaN;
+                    dewPointC = NaN;
+                    visibilityKm = data.visibility !== undefined ? (data.visibility / 1000.0) : NaN;
+                    weatherCode = (data.weather && data.weather.length > 0) ? openWeatherCodeToWmo(data.weather[0].id) : 2;
+                    dailyData = [];
+                    loading = false;
+                    updateText = "Updated " + Qt.formatTime(new Date(), "HH:mm") + " (OpenWeather)";
+                };
+
+                owReq.open("GET", owEndpoint);
+                owReq.send();
+                return;
             }
-            updateText = "Updated " + Qt.formatTime(new Date(), "HH:mm");
-        };
 
-        request.open("GET", endpoint);
-        request.send();
+            if (provider === "weatherApi") {
+                var waReq = new XMLHttpRequest();
+                var waEndpoint = "https://api.weatherapi.com/v1/forecast.json?key=" + encodeURIComponent(bundledWeatherApiKey)
+                    + "&q=" + encodeURIComponent(Plasmoid.configuration.latitude + "," + Plasmoid.configuration.longitude)
+                    + "&days=" + Math.max(3, Plasmoid.configuration.forecastDays)
+                    + "&aqi=no&alerts=no";
+
+                waReq.onreadystatechange = function() {
+                    if (waReq.readyState !== XMLHttpRequest.DONE) return;
+                    if (waReq.status !== 200) {
+                        tryProvider(index + 1);
+                        return;
+                    }
+
+                    var data = JSON.parse(waReq.responseText);
+                    if (!data.current) {
+                        tryProvider(index + 1);
+                        return;
+                    }
+
+                    temperatureC = data.current.temp_c;
+                    apparentC = data.current.feelslike_c;
+                    humidityPercent = data.current.humidity;
+                    pressureHpa = data.current.pressure_mb;
+                    windKmh = data.current.wind_kph;
+                    dewPointC = NaN;
+                    visibilityKm = data.current.vis_km;
+                    weatherCode = data.current.condition ? weatherApiCodeToWmo(data.current.condition.code) : 2;
+
+                    dailyData = [];
+                    if (data.forecast && data.forecast.forecastday) {
+                        var maxDays = Math.min(Plasmoid.configuration.forecastDays, data.forecast.forecastday.length);
+                        for (var i = 0; i < maxDays; ++i) {
+                            var f = data.forecast.forecastday[i];
+                            dailyData.push({
+                                day: Qt.formatDate(new Date(f.date), "ddd"),
+                                maxC: f.day.maxtemp_c,
+                                minC: f.day.mintemp_c,
+                                code: weatherApiCodeToWmo(f.day.condition.code)
+                            });
+                        }
+                    }
+
+                    loading = false;
+                    updateText = "Updated " + Qt.formatTime(new Date(), "HH:mm") + " (WeatherAPI.com)";
+                };
+
+                waReq.open("GET", waEndpoint);
+                waReq.send();
+                return;
+            }
+
+            if (provider === "metno") {
+                var metReq = new XMLHttpRequest();
+                var metEndpoint = "https://api.met.no/weatherapi/locationforecast/2.0/compact?lat="
+                    + encodeURIComponent(Plasmoid.configuration.latitude)
+                    + "&lon="
+                    + encodeURIComponent(Plasmoid.configuration.longitude);
+
+                metReq.onreadystatechange = function() {
+                    if (metReq.readyState !== XMLHttpRequest.DONE) return;
+                    if (metReq.status !== 200) {
+                        tryProvider(index + 1);
+                        return;
+                    }
+
+                    var data = JSON.parse(metReq.responseText);
+                    if (!data.properties || !data.properties.timeseries || data.properties.timeseries.length === 0) {
+                        tryProvider(index + 1);
+                        return;
+                    }
+
+                    var ts = data.properties.timeseries[0];
+                    var details = ts.data && ts.data.instant ? ts.data.instant.details : null;
+                    if (!details) {
+                        tryProvider(index + 1);
+                        return;
+                    }
+
+                    temperatureC = details.air_temperature;
+                    apparentC = details.air_temperature;
+                    humidityPercent = details.relative_humidity;
+                    pressureHpa = details.air_pressure_at_sea_level;
+                    windKmh = details.wind_speed !== undefined ? details.wind_speed * 3.6 : NaN;
+                    dewPointC = details.dew_point_temperature;
+                    visibilityKm = NaN;
+
+                    var symbol = ts.data && ts.data.next_1_hours && ts.data.next_1_hours.summary
+                        ? ts.data.next_1_hours.summary.symbol_code
+                        : "";
+                    weatherCode = metNoSymbolToWmo(symbol);
+                    dailyData = [];
+                    loading = false;
+                    updateText = "Updated " + Qt.formatTime(new Date(), "HH:mm") + " (met.no)";
+                };
+
+                metReq.open("GET", metEndpoint);
+                metReq.send();
+                return;
+            }
+
+            var request = new XMLHttpRequest();
+            var timezoneValue = (Plasmoid.configuration.timezone || "").trim();
+            var endpoint = "https://api.open-meteo.com/v1/forecast?latitude=" + Plasmoid.configuration.latitude
+                + "&longitude=" + Plasmoid.configuration.longitude
+                + "&timezone=" + encodeURIComponent(timezoneValue.length > 0 ? timezoneValue : "auto")
+                + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,surface_pressure,dew_point_2m,visibility"
+                + "&daily=weather_code,temperature_2m_max,temperature_2m_min";
+
+            request.onreadystatechange = function() {
+                if (request.readyState !== XMLHttpRequest.DONE) return;
+                if (request.status !== 200) {
+                    tryProvider(index + 1);
+                    return;
+                }
+
+                var data = JSON.parse(request.responseText);
+                if (!data.current) {
+                    tryProvider(index + 1);
+                    return;
+                }
+
+                temperatureC = data.current.temperature_2m;
+                apparentC = data.current.apparent_temperature;
+                humidityPercent = data.current.relative_humidity_2m;
+                windKmh = data.current.wind_speed_10m;
+                pressureHpa = data.current.surface_pressure;
+                dewPointC = data.current.dew_point_2m;
+                visibilityKm = data.current.visibility / 1000.0;
+                weatherCode = data.current.weather_code;
+
+                dailyData = [];
+                if (data.daily && data.daily.time) {
+                    var maxDays = Math.min(Plasmoid.configuration.forecastDays, data.daily.time.length);
+                    for (var i = 0; i < maxDays; ++i) {
+                        dailyData.push({
+                            day: Qt.formatDate(new Date(data.daily.time[i]), "ddd"),
+                            maxC: data.daily.temperature_2m_max[i],
+                            minC: data.daily.temperature_2m_min[i],
+                            code: data.daily.weather_code[i]
+                        });
+                    }
+                }
+                loading = false;
+                updateText = "Updated " + Qt.formatTime(new Date(), "HH:mm") + " (Open-Meteo)";
+            };
+
+            request.open("GET", endpoint);
+            request.send();
+        }
+
+        tryProvider(0);
     }
+
 
     function scrollLines() {
         var raw = Plasmoid.configuration.scrollboxItems;
@@ -136,9 +358,11 @@ PlasmoidItem {
 
     Connections {
         target: Plasmoid.configuration
+        function onLocationNameChanged() { refreshNow(); }
         function onLatitudeChanged() { refreshNow(); }
         function onLongitudeChanged() { refreshNow(); }
         function onTimezoneChanged() { refreshNow(); }
+        function onWeatherProviderChanged() { refreshNow(); }
         function onForecastDaysChanged() { refreshNow(); }
     }
 
@@ -173,125 +397,158 @@ PlasmoidItem {
 
             Label {
                 Layout.fillWidth: true
-                text: Plasmoid.configuration.locationName
+                text: hasSelectedTown ? Plasmoid.configuration.locationName : ""
                 horizontalAlignment: Text.AlignHCenter
                 color: "white"
                 font.bold: true
             }
 
-            Rectangle {
-                visible: Plasmoid.configuration.showScrollbox
-                Layout.fillWidth: true
-                Layout.preferredHeight: 24 * Math.max(1, Plasmoid.configuration.scrollboxLines)
-                color: Qt.rgba(0.12, 0.12, 0.12, 0.45)
-                border.color: Qt.rgba(0.80, 0.72, 0.58, 0.7)
-
-                Column {
-                    anchors.fill: parent
-                    anchors.margins: 4
-                    Repeater {
-                        model: Math.max(1, Plasmoid.configuration.scrollboxLines)
-                        delegate: Label {
-                            required property int index
-                            text: {
-                                var lines = root.scrollLines();
-                                return lines.length === 0 ? "" : root.scrollLineText(lines[(root.scrollIndex + index) % lines.length]);
-                            }
-                            color: "white"
-                        }
-                    }
-                }
-            }
-
-            RowLayout {
+            Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: 6
 
-                Rectangle {
-                    Layout.preferredWidth: Math.max(140, root.width * 0.28)
-                    Layout.fillHeight: true
-                    color: Qt.rgba(0.25, 0.19, 0.13, 0.45)
-                    border.color: Qt.rgba(0.80, 0.72, 0.58, 0.65)
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width, 320)
+                    spacing: 10
+                    visible: !hasSelectedTown
 
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 6
-                        spacing: 4
-                        Label { text: Qt.formatTime(new Date(), "HH:mm"); color: "white"; font.bold: true }
-                        Kirigami.Icon {
-                            source: weatherCodeToIcon(weatherCode)
-                            Layout.alignment: Qt.AlignHCenter
-                            Layout.preferredWidth: 72
-                            Layout.preferredHeight: 72
-                        }
-                        Label { text: weatherCodeToText(weatherCode); color: "white"; Layout.alignment: Qt.AlignHCenter }
-                        Item { Layout.fillHeight: true }
-                        Label { text: loading ? "Updating..." : updateText; color: "#d7d7d7"; font.pixelSize: 10 }
+                    Label {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        color: "white"
+                        text: "No town selected yet."
+                    }
+
+                    Button {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: "Select town"
+                        icon.name: "settings-configure"
+                        onClicked: root.openLocationSettings()
                     }
                 }
 
                 ColumnLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
+                    anchors.fill: parent
                     spacing: 6
+                    visible: hasSelectedTown
 
                     Rectangle {
+                        visible: Plasmoid.configuration.showScrollbox
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Math.max(92, root.height * 0.35)
-                        color: Qt.rgba(0.25, 0.19, 0.13, 0.45)
-                        border.color: Qt.rgba(0.80, 0.72, 0.58, 0.65)
+                        Layout.preferredHeight: 24 * Math.max(1, Plasmoid.configuration.scrollboxLines)
+                        color: Qt.rgba(0.12, 0.12, 0.12, 0.45)
+                        border.color: Qt.rgba(0.80, 0.72, 0.58, 0.7)
 
-                        RowLayout {
+                        Column {
                             anchors.fill: parent
-                            anchors.margins: 6
-                            spacing: 10
-
-                            Label {
-                                text: tempValue(temperatureC)
-                                color: "white"
-                                font.pixelSize: Math.max(28, Math.min(54, root.width * 0.11))
-                                font.bold: true
-                            }
-
-                            Column {
-                                spacing: 3
-                                Label { text: "Wind: " + windValue(windKmh); color: "white" }
-                                Label { text: "Feels like: " + tempValue(apparentC); color: "white" }
-                                Label { text: "Humidity: " + (isNaN(humidityPercent) ? "--" : Math.round(humidityPercent) + "%"); color: "white" }
-                                Label { text: "Pressure: " + pressureValue(pressureHpa); color: "white" }
+                            anchors.margins: 4
+                            Repeater {
+                                model: Math.max(1, Plasmoid.configuration.scrollboxLines)
+                                delegate: Label {
+                                    required property int index
+                                    text: {
+                                        var lines = root.scrollLines();
+                                        return lines.length === 0 ? "" : root.scrollLineText(lines[(root.scrollIndex + index) % lines.length]);
+                                    }
+                                    color: "white"
+                                }
                             }
                         }
                     }
 
-                    Flow {
-                        id: forecastFlow
+                    RowLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        spacing: 4
+                        spacing: 6
 
-                        Repeater {
-                            model: dailyData
-                            delegate: Rectangle {
-                                required property var modelData
-                                width: Math.max(88, (forecastFlow.width - (forecastFlow.spacing * 4)) / 5)
-                                height: Math.max(90, forecastFlow.height / 2 - 4)
+                        Rectangle {
+                            Layout.preferredWidth: Math.max(140, root.width * 0.28)
+                            Layout.fillHeight: true
+                            color: Qt.rgba(0.25, 0.19, 0.13, 0.45)
+                            border.color: Qt.rgba(0.80, 0.72, 0.58, 0.65)
+
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: 6
+                                spacing: 4
+                                Label { text: Qt.formatTime(new Date(), "HH:mm"); color: "white"; font.bold: true }
+                                Kirigami.Icon {
+                                    source: weatherCodeToIcon(weatherCode)
+                                    Layout.alignment: Qt.AlignHCenter
+                                    Layout.preferredWidth: 72
+                                    Layout.preferredHeight: 72
+                                }
+                                Label { text: weatherCodeToText(weatherCode); color: "white"; Layout.alignment: Qt.AlignHCenter }
+                                Item { Layout.fillHeight: true }
+                                Label { text: loading ? "Updating..." : updateText; color: "#d7d7d7"; font.pixelSize: 10 }
+                            }
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            spacing: 6
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Math.max(92, root.height * 0.35)
                                 color: Qt.rgba(0.25, 0.19, 0.13, 0.45)
                                 border.color: Qt.rgba(0.80, 0.72, 0.58, 0.65)
 
-                                Column {
+                                RowLayout {
                                     anchors.fill: parent
-                                    anchors.margins: 4
-                                    spacing: 1
-                                    Label { text: modelData.day; color: "white"; font.bold: true }
-                                    Label { text: tempValue(modelData.maxC) + " / " + tempValue(modelData.minC); color: "#e8e8e8" }
-                                    Kirigami.Icon { source: weatherCodeToIcon(modelData.code); width: 24; height: 24 }
+                                    anchors.margins: 6
+                                    spacing: 10
+
                                     Label {
-                                        text: weatherCodeToText(modelData.code)
-                                        color: "#f0f0f0"
-                                        font.pixelSize: 10
-                                        elide: Text.ElideRight
-                                        width: parent.width
+                                        text: tempValue(temperatureC)
+                                        color: "white"
+                                        font.pixelSize: Math.max(28, Math.min(54, root.width * 0.11))
+                                        font.bold: true
+                                    }
+
+                                    Column {
+                                        spacing: 3
+                                        Label { text: "Wind: " + windValue(windKmh); color: "white" }
+                                        Label { text: "Feels like: " + tempValue(apparentC); color: "white" }
+                                        Label { text: "Humidity: " + (isNaN(humidityPercent) ? "--" : Math.round(humidityPercent) + "%"); color: "white" }
+                                        Label { text: "Pressure: " + pressureValue(pressureHpa); color: "white" }
+                                    }
+                                }
+                            }
+
+                            Flow {
+                                id: forecastFlow
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                spacing: 4
+
+                                Repeater {
+                                    model: dailyData
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        width: Math.max(88, (forecastFlow.width - (forecastFlow.spacing * 4)) / 5)
+                                        height: Math.max(90, forecastFlow.height / 2 - 4)
+                                        color: Qt.rgba(0.25, 0.19, 0.13, 0.45)
+                                        border.color: Qt.rgba(0.80, 0.72, 0.58, 0.65)
+
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 4
+                                            spacing: 1
+                                            Label { text: modelData.day; color: "white"; font.bold: true }
+                                            Label { text: tempValue(modelData.maxC) + " / " + tempValue(modelData.minC); color: "#e8e8e8" }
+                                            Kirigami.Icon { source: weatherCodeToIcon(modelData.code); width: 24; height: 24 }
+                                            Label {
+                                                text: weatherCodeToText(modelData.code)
+                                                color: "#f0f0f0"
+                                                font.pixelSize: 10
+                                                elide: Text.ElideRight
+                                                width: parent.width
+                                            }
+                                        }
                                     }
                                 }
                             }

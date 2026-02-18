@@ -30,6 +30,19 @@ plasmashell --replace
 
 ## Recent fixes
 
+- Added **Adaptive** provider mode with automatic fallback across Open-Meteo, OpenWeather, WeatherAPI.com, and met.no.
+- Added built-in provider support for **WeatherAPI.com** and bundled provider keys for OpenWeather/WeatherAPI builds.
+- Improved location search to better return non-Latin town names (e.g. Cyrillic like `Царевци`) by combining Open-Meteo and Nominatim results.
+- Added a new **General** settings side-tab to select weather provider: Adaptive, Open-Meteo, OpenWeather, WeatherAPI.com, or met.no.
+- Default location mode is now **Automatically detect location**.
+- Main widget now shows an empty-state with a **Select town** button when no location is configured.
+- Removed hardcoded default city values (location/timezone/coordinates now start empty/zero for a clean first-time setup).
+- Fixed Plasma compatibility issue in Location page by removing unsupported `buttons` property assignment from `KCM.SimpleKCM`.
+- Location search now auto-updates results while typing (debounced), with a compact search field and adjacent Search button.
+- Removed in-panel OK/Cancel controls in the search page; use Back or double-click a result to apply.
+- Refactored the Location page transition to use an action-driven slide workflow (Kirigami `ActionToolBar`) instead of a popup-like mini window.
+- Refactored Location page search UX: `Change...` now opens an in-page animated search panel (no separate dialog window), and location mode radio rows are aligned.
+- Improved auto-detect reliability and UX: auto mode now updates timezone/elevation metadata and keeps form layout stable (no shifted fields).
 - Implemented auto-detect mode updates: when enabled, coordinates are fetched from GeoClue2 (`QtPositioning`) and location name/timezone are reverse-geocoded automatically.
 - Fixed Location page load error by replacing unsupported `leftPadding` usage with layout margins for Plasma/Qt compatibility.
 - Added Location mode toggle: **Automatically detect location** vs **Use manual location**; manual controls and **Change...** are disabled/hidden in auto mode.

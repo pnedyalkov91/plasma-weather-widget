@@ -3,85 +3,174 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtPositioning
 import org.kde.kcmutils as KCM
+import org.kde.kirigami as Kirigami
 
 KCM.SimpleKCM {
     id: root
 
-    property bool cfg_autoDetectLocation: false
-    property string cfg_locationName: "London, United Kingdom"
-    property real cfg_latitude: 51.5072
-    property real cfg_longitude: -0.1276
-    property int cfg_altitude: 35
-    property string cfg_timezone: "Europe/London"
+
+    property bool cfg_autoDetectLocation: true
+    property string cfg_locationName: ""
+    property real cfg_latitude: 0.0
+    property real cfg_longitude: 0.0
+    property int cfg_altitude: 0
+    property string cfg_timezone: ""
     property string cfg_altitudeUnit: "m"
 
     property var searchResults: []
     property bool autoDetectBusy: false
     property string autoDetectStatus: ""
 
+    property int pageIndex: 0
+
     function displayAltitudeUnit() {
         return cfg_altitudeUnit === "ft" ? "feet" : "meters";
+    }
+
+    function openSearchPage() {
+        searchPanel.selectedResult = null;
+        searchPanel.selectedIndex = -1;
+        resultsList.currentIndex = -1;
+        searchField.text = root.cfg_locationName.split(",")[0].trim();
+        root.performSearch(searchField.text);
+        root.pageIndex = 1;
+    }
+
+    function closeSearchPage() {
+        root.pageIndex = 0;
     }
 
     function performSearch(query) {
         if (!query || query.trim().length < 2) {
             searchResults = [];
-            searchDialog.selectedResult = null;
-            searchDialog.selectedIndex = -1;
+            searchPanel.selectedResult = null;
+            searchPanel.selectedIndex = -1;
+            resultsList.currentIndex = -1;
             return;
         }
 
-        var req = new XMLHttpRequest();
-        var endpoint = "https://geocoding-api.open-meteo.com/v1/search?count=20&language=en&format=json&name="
-            + encodeURIComponent(query.trim());
-        req.onreadystatechange = function() {
-            if (req.readyState !== XMLHttpRequest.DONE) {
+        var q = query.trim();
+        var collected = [];
+        var pending = 2;
+
+        function done() {
+            pending -= 1;
+            if (pending > 0) {
                 return;
             }
-            if (req.status !== 200) {
-                searchResults = [];
-                searchDialog.selectedResult = null;
-                searchDialog.selectedIndex = -1;
-                return;
+
+            var dedup = {};
+            var finalList = [];
+            for (var i = 0; i < collected.length; ++i) {
+                var item = collected[i];
+                var key = item.name + "|" + Number(item.latitude).toFixed(4) + "|" + Number(item.longitude).toFixed(4);
+                if (dedup[key]) {
+                    continue;
+                }
+                dedup[key] = true;
+                finalList.push(item);
             }
-            var data = JSON.parse(req.responseText);
-            searchResults = data.results ? data.results : [];
-            searchDialog.selectedResult = null;
-            searchDialog.selectedIndex = -1;
+
+            searchResults = finalList;
+            searchPanel.selectedResult = null;
+            searchPanel.selectedIndex = -1;
             resultsList.currentIndex = -1;
+        }
+
+        var openMeteoReq = new XMLHttpRequest();
+        var openMeteoEndpoint = "https://geocoding-api.open-meteo.com/v1/search?count=20&format=json&name="
+            + encodeURIComponent(q);
+        openMeteoReq.onreadystatechange = function() {
+            if (openMeteoReq.readyState !== XMLHttpRequest.DONE) {
+                return;
+            }
+            if (openMeteoReq.status === 200) {
+                var data = JSON.parse(openMeteoReq.responseText);
+                var list = data.results ? data.results : [];
+                for (var i = 0; i < list.length; ++i) {
+                    collected.push(list[i]);
+                }
+            }
+            done();
         };
-        req.open("GET", endpoint);
-        req.send();
+        openMeteoReq.open("GET", openMeteoEndpoint);
+        openMeteoReq.send();
+
+        var nominatimReq = new XMLHttpRequest();
+        var nominatimEndpoint = "https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=20&q="
+            + encodeURIComponent(q);
+        nominatimReq.onreadystatechange = function() {
+            if (nominatimReq.readyState !== XMLHttpRequest.DONE) {
+                return;
+            }
+            if (nominatimReq.status === 200) {
+                var items = JSON.parse(nominatimReq.responseText);
+                for (var j = 0; j < items.length; ++j) {
+                    var n = items[j];
+                    var first = n.display_name ? n.display_name.split(",")[0].trim() : q;
+                    var country = n.address && n.address.country ? n.address.country : "";
+                    var admin = n.address && (n.address.state || n.address.county || n.address.municipality)
+                        ? (n.address.state || n.address.county || n.address.municipality)
+                        : "";
+                    collected.push({
+                        name: first,
+                        country: country,
+                        admin1: admin,
+                        latitude: parseFloat(n.lat),
+                        longitude: parseFloat(n.lon),
+                        timezone: "",
+                        display_name: n.display_name ? n.display_name : ""
+                    });
+                }
+            }
+            done();
+        };
+        nominatimReq.open("GET", nominatimEndpoint);
+        nominatimReq.send();
     }
 
     function reverseGeocode(lat, lon) {
-        var req = new XMLHttpRequest();
-        var endpoint = "https://geocoding-api.open-meteo.com/v1/reverse?latitude="
+        var metaReq = new XMLHttpRequest();
+        var metaEndpoint = "https://api.open-meteo.com/v1/forecast?latitude="
             + encodeURIComponent(lat)
             + "&longitude="
             + encodeURIComponent(lon)
-            + "&language=en&format=json";
+            + "&current=temperature_2m&timezone=auto";
+
+        metaReq.onreadystatechange = function() {
+            if (metaReq.readyState !== XMLHttpRequest.DONE) {
+                return;
+            }
+
+            if (metaReq.status === 200) {
+                var meta = JSON.parse(metaReq.responseText);
+                if (meta.timezone) cfg_timezone = meta.timezone;
+                if (meta.elevation !== undefined && !isNaN(meta.elevation)) cfg_altitude = Math.round(meta.elevation);
+            }
+        };
+        metaReq.open("GET", metaEndpoint);
+        metaReq.send();
+
+        var req = new XMLHttpRequest();
+        var endpoint = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1&lat="
+            + encodeURIComponent(lat)
+            + "&lon="
+            + encodeURIComponent(lon);
 
         req.onreadystatechange = function() {
             if (req.readyState !== XMLHttpRequest.DONE) {
                 return;
             }
 
-            if (req.status !== 200) {
-                autoDetectBusy = false;
-                autoDetectStatus = "Auto-detection updated coordinates.";
-                return;
-            }
-
-            var data = JSON.parse(req.responseText);
-            if (data.results && data.results.length > 0) {
-                var r = data.results[0];
-                cfg_locationName = r.name + ", " + (r.country ? r.country : "");
-                if (r.timezone) {
-                    cfg_timezone = r.timezone;
-                }
-                if (r.elevation !== undefined) {
-                    cfg_altitude = Math.round(r.elevation);
+            if (req.status === 200) {
+                var data = JSON.parse(req.responseText);
+                if (data && data.address) {
+                    var a = data.address;
+                    var city = a.city || a.town || a.village || a.municipality || a.county || "";
+                    var country = a.country || "";
+                    if (city.length > 0 || country.length > 0) {
+                        cfg_locationName = city.length > 0 && country.length > 0 ? (city + ", " + country) : (city + country);
+                    }
                 }
                 autoDetectStatus = "Auto-detected via GeoClue2.";
             } else {
@@ -99,7 +188,6 @@ KCM.SimpleKCM {
             autoDetectBusy = false;
             return;
         }
-
         autoDetectBusy = true;
         autoDetectStatus = "Requesting location from GeoClue2…";
 
@@ -108,7 +196,6 @@ KCM.SimpleKCM {
             autoDetectStatus = "GeoClue2 location unavailable on this system.";
             return;
         }
-
         positionSource.update();
     }
 
@@ -116,7 +203,6 @@ KCM.SimpleKCM {
         if (!item) {
             return;
         }
-
         cfg_locationName = item.name + ", " + (item.country ? item.country : "");
         cfg_latitude = item.latitude;
         cfg_longitude = item.longitude;
@@ -144,7 +230,6 @@ KCM.SimpleKCM {
             if (!root.cfg_autoDetectLocation) {
                 return;
             }
-
             var c = position.coordinate;
             if (!c || !c.isValid) {
                 root.autoDetectBusy = false;
@@ -154,10 +239,9 @@ KCM.SimpleKCM {
 
             root.cfg_latitude = c.latitude;
             root.cfg_longitude = c.longitude;
-            if (c.altitude && !isNaN(c.altitude)) {
+            if (!isNaN(c.altitude)) {
                 root.cfg_altitude = Math.round(c.altitude);
             }
-
             root.reverseGeocode(c.latitude, c.longitude);
         }
 
@@ -169,292 +253,335 @@ KCM.SimpleKCM {
         }
     }
 
-    ColumnLayout {
-        anchors.fill: parent
-        spacing: 10
-
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: 74
-            color: Qt.rgba(0.88, 0.85, 0.80, 0.65)
-            radius: 3
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.margins: 10
-                spacing: 10
-
-                Label {
-                    text: "ℹ"
-                    font.pixelSize: 18
-                }
-
-                Label {
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                    text: "Please change location name to your liking and correct altitude and timezone if they are not auto-detected correctly."
-                }
-            }
-        }
-
-        ButtonGroup {
-            id: locationModeGroup
-        }
-
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: 4
-
-            RadioButton {
-                text: "Automatically detect location"
-                checked: root.cfg_autoDetectLocation
-                ButtonGroup.group: locationModeGroup
-                onClicked: root.cfg_autoDetectLocation = true
-            }
-
-            RowLayout {
-                Layout.leftMargin: 24
-                spacing: 8
-                Label {
-                    text: root.autoDetectBusy ? "Detecting…" : (root.autoDetectStatus.length > 0 ? root.autoDetectStatus : "GeoLocation can be provided by KDE/GeoClue2 depending on system configuration and permissions.")
-                    opacity: 0.78
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                }
-                Button {
-                    text: "Refresh"
-                    enabled: root.cfg_autoDetectLocation && !root.autoDetectBusy
-                    visible: root.cfg_autoDetectLocation
-                    onClicked: root.refreshAutoDetectedLocation()
-                }
-            }
-
-            RowLayout {
-                Layout.leftMargin: 24
-                RadioButton {
-                    text: "Use manual location"
-                    checked: !root.cfg_autoDetectLocation
-                    ButtonGroup.group: locationModeGroup
-                    onClicked: root.cfg_autoDetectLocation = false
-                }
-                Label { text: "Latitude:"; opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0 }
-                Label { text: Number(root.cfg_latitude).toFixed(2); opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0 }
-                Label { text: "Longitude:"; opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0 }
-                Label { text: Number(root.cfg_longitude).toFixed(2); opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0 }
-            }
-        }
-
-        GridLayout {
-            Layout.fillWidth: true
-            columns: 4
-            columnSpacing: 10
-            rowSpacing: 8
-            enabled: !root.cfg_autoDetectLocation
-            opacity: root.cfg_autoDetectLocation ? 0.5 : 1.0
-
-            Label { text: "Location name:" }
-            TextField {
-                Layout.columnSpan: 2
-                Layout.fillWidth: true
-                text: root.cfg_locationName
-                onTextChanged: root.cfg_locationName = text
-            }
-            Button {
-                text: "Change..."
-                visible: !root.cfg_autoDetectLocation
-                enabled: !root.cfg_autoDetectLocation
-                onClicked: {
-                    searchField.text = root.cfg_locationName.split(",")[0].trim();
-                    root.performSearch(searchField.text);
-                    searchDialog.open();
-                }
-            }
-
-            Label { text: "Latitude:" }
-            SpinBox {
-                Layout.columnSpan: 2
-                Layout.fillWidth: true
-                from: -900000
-                to: 900000
-                editable: true
-                stepSize: 1
-                value: Math.round(root.cfg_latitude * 10000)
-                textFromValue: function(value) { return (value / 10000).toFixed(4); }
-                valueFromText: function(text) {
-                    var parsed = parseFloat(text);
-                    return isNaN(parsed) ? 0 : Math.round(parsed * 10000);
-                }
-                onValueModified: root.cfg_latitude = value / 10000
-            }
-            Label { text: "°" }
-
-            Label { text: "Longitude:" }
-            SpinBox {
-                Layout.columnSpan: 2
-                Layout.fillWidth: true
-                from: -1800000
-                to: 1800000
-                editable: true
-                stepSize: 1
-                value: Math.round(root.cfg_longitude * 10000)
-                textFromValue: function(value) { return (value / 10000).toFixed(4); }
-                valueFromText: function(text) {
-                    var parsed = parseFloat(text);
-                    return isNaN(parsed) ? 0 : Math.round(parsed * 10000);
-                }
-                onValueModified: root.cfg_longitude = value / 10000
-            }
-            Label { text: "°" }
-
-            Label { text: "Altitude:" }
-            SpinBox {
-                Layout.columnSpan: 2
-                Layout.fillWidth: true
-                from: -500
-                to: 12000
-                value: root.cfg_altitude
-                onValueModified: root.cfg_altitude = value
-            }
-            Label { text: root.displayAltitudeUnit() }
-
-            Label { text: "Timezone:" }
-            TextField {
-                Layout.columnSpan: 3
-                Layout.fillWidth: true
-                text: root.cfg_timezone
-                onTextChanged: root.cfg_timezone = text
-            }
-        }
-
-        Item { Layout.fillHeight: true }
+    Timer {
+        id: searchDebounce
+        interval: 260
+        repeat: false
+        onTriggered: root.performSearch(searchField.text)
     }
 
-    Dialog {
-        id: searchDialog
-        title: "Search location"
-        modal: true
-        width: 620
-        height: 540
+    Item {
+        anchors.fill: parent
+        clip: true
 
-        property var selectedResult: null
-        property int selectedIndex: -1
+        Row {
+            id: pageRow
+            height: parent.height
+            width: parent.width * 2
+            x: -root.pageIndex * parent.width
 
-        onOpened: {
-            selectedResult = null;
-            selectedIndex = -1;
-            resultsList.currentIndex = -1;
-        }
-
-        contentItem: ColumnLayout {
-            spacing: 8
-
-            Label {
-                Layout.fillWidth: true
-                horizontalAlignment: Text.AlignHCenter
-                text: "Enter a city name or address"
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                TextField {
-                    id: searchField
-                    Layout.fillWidth: true
-                    placeholderText: "Vienna"
-                    selectByMouse: true
-                    color: "white"
-                    background: Rectangle {
-                        radius: 4
-                        color: Qt.rgba(0.10, 0.10, 0.10, 0.35)
-                        border.color: Qt.rgba(0.7, 0.7, 0.7, 0.8)
-                    }
-                    onAccepted: root.performSearch(text)
-                }
-                Button {
-                    text: "Search"
-                    icon.name: "edit-find"
-                    onClicked: root.performSearch(searchField.text)
+            Behavior on x {
+                NumberAnimation {
+                    duration: 260
+                    easing.type: Easing.InOutCubic
                 }
             }
 
-            Label {
-                text: "Results"
-                font.bold: true
-                opacity: 0.8
-            }
+            Item {
+                width: parent.width / 2
+                height: parent.height
 
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                border.color: Qt.rgba(0.6, 0.6, 0.6, 1)
-                color: "transparent"
-
-                ListView {
-                    id: resultsList
+                ColumnLayout {
                     anchors.fill: parent
-                    clip: true
-                    model: root.searchResults
-                    currentIndex: searchDialog.selectedIndex
+                    spacing: 10
 
-                    delegate: Rectangle {
-                        required property var modelData
-                        required property int index
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: 74
+                        color: Qt.rgba(0.88, 0.85, 0.80, 0.65)
+                        radius: 3
 
-                        width: ListView.view.width
-                        height: 34
-                        color: index === searchDialog.selectedIndex
-                            ? Qt.rgba(0.24, 0.52, 0.91, 0.9)
-                            : "transparent"
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: 10
+                            spacing: 10
+                            Label { text: "ℹ"; font.pixelSize: 18 }
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                text: "Please change location name to your liking and correct altitude and timezone if they are not auto-detected correctly."
+                            }
+                        }
+                    }
+
+                    ButtonGroup { id: locationModeGroup }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            RadioButton {
+                                text: "Automatically detect location"
+                                checked: root.cfg_autoDetectLocation
+                                ButtonGroup.group: locationModeGroup
+                                onClicked: root.cfg_autoDetectLocation = true
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: 24
+                            spacing: 8
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                opacity: 0.78
+                                text: root.autoDetectBusy
+                                    ? "Detecting…"
+                                    : (root.autoDetectStatus.length > 0
+                                        ? root.autoDetectStatus
+                                        : "GeoLocation can be provided by KDE/GeoClue2 depending on system configuration and permissions.")
+                            }
+                            Button {
+                                text: "Refresh"
+                                visible: root.cfg_autoDetectLocation
+                                enabled: root.cfg_autoDetectLocation && !root.autoDetectBusy
+                                onClicked: root.refreshAutoDetectedLocation()
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            RadioButton {
+                                text: "Use manual location"
+                                checked: !root.cfg_autoDetectLocation
+                                ButtonGroup.group: locationModeGroup
+                                onClicked: root.cfg_autoDetectLocation = false
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: 24
+                            spacing: 8
+                            Label { text: "Latitude:"; opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0 }
+                            Label { text: Number(root.cfg_latitude).toFixed(2); opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0 }
+                            Label { text: "Longitude:"; opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0 }
+                            Label { text: Number(root.cfg_longitude).toFixed(2); opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0 }
+                        }
+                    }
+
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: 4
+                        columnSpacing: 10
+                        rowSpacing: 8
+                        enabled: !root.cfg_autoDetectLocation
+                        opacity: root.cfg_autoDetectLocation ? 0.5 : 1.0
+
+                        Label { text: "Location name:" }
+                        TextField {
+                            Layout.columnSpan: 2
+                            Layout.fillWidth: true
+                            text: root.cfg_locationName
+                            onTextChanged: root.cfg_locationName = text
+                        }
+                        Button {
+                            text: "Change..."
+                            enabled: !root.cfg_autoDetectLocation
+                            opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0
+                            onClicked: root.openSearchPage()
+                        }
+
+                        Label { text: "Latitude:" }
+                        SpinBox {
+                            Layout.columnSpan: 2
+                            Layout.fillWidth: true
+                            from: -900000
+                            to: 900000
+                            editable: true
+                            stepSize: 1
+                            value: Math.round(root.cfg_latitude * 10000)
+                            textFromValue: function(value) { return (value / 10000).toFixed(4); }
+                            valueFromText: function(text) {
+                                var parsed = parseFloat(text);
+                                return isNaN(parsed) ? 0 : Math.round(parsed * 10000);
+                            }
+                            onValueModified: root.cfg_latitude = value / 10000
+                        }
+                        Label { text: "°" }
+
+                        Label { text: "Longitude:" }
+                        SpinBox {
+                            Layout.columnSpan: 2
+                            Layout.fillWidth: true
+                            from: -1800000
+                            to: 1800000
+                            editable: true
+                            stepSize: 1
+                            value: Math.round(root.cfg_longitude * 10000)
+                            textFromValue: function(value) { return (value / 10000).toFixed(4); }
+                            valueFromText: function(text) {
+                                var parsed = parseFloat(text);
+                                return isNaN(parsed) ? 0 : Math.round(parsed * 10000);
+                            }
+                            onValueModified: root.cfg_longitude = value / 10000
+                        }
+                        Label { text: "°" }
+
+                        Label { text: "Altitude:" }
+                        SpinBox {
+                            Layout.columnSpan: 2
+                            Layout.fillWidth: true
+                            from: -500
+                            to: 12000
+                            value: root.cfg_altitude
+                            onValueModified: root.cfg_altitude = value
+                        }
+                        Label { text: root.displayAltitudeUnit() }
+
+                        Label { text: "Timezone:" }
+                        TextField {
+                            Layout.columnSpan: 3
+                            Layout.fillWidth: true
+                            text: root.cfg_timezone
+                            onTextChanged: root.cfg_timezone = text
+                        }
+                    }
+
+                    Item { Layout.fillHeight: true }
+                }
+            }
+
+            Item {
+                id: searchPanel
+                width: parent.width / 2
+                height: parent.height
+
+                property var selectedResult: null
+                property int selectedIndex: -1
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    spacing: 8
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        ToolButton {
+                            icon.name: "go-previous"
+                            text: ""
+                            onClicked: root.closeSearchPage()
+                        }
 
                         Label {
-                            anchors.fill: parent
-                            anchors.leftMargin: 8
-                            anchors.rightMargin: 8
-                            verticalAlignment: Text.AlignVCenter
-                            text: {
-                                var admin = modelData.admin1 ? ", " + modelData.admin1 : "";
-                                var country = modelData.country ? ", " + modelData.country : "";
-                                return modelData.name + admin + country;
-                            }
-                            color: "white"
-                            elide: Text.ElideRight
+                            text: "Search location"
+                            font.bold: true
+                            font.pixelSize: 16
                         }
 
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: {
-                                searchDialog.selectedIndex = index;
-                                searchDialog.selectedResult = modelData;
-                                resultsList.currentIndex = index;
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        TextField {
+                            id: searchField
+                            Layout.preferredWidth: Math.min(460, searchPanel.width * 2.72)
+                            Layout.fillWidth: true
+                            placeholderText: ""
+                            selectByMouse: true
+                            onTextEdited: {
+                                searchPanel.selectedResult = null;
+                                searchPanel.selectedIndex = -1;
+                                resultsList.currentIndex = -1;
+                                searchDebounce.restart();
                             }
-                            onDoubleClicked: {
-                                searchDialog.selectedIndex = index;
-                                searchDialog.selectedResult = modelData;
-                                root.applySearchResult(modelData);
-                                searchDialog.close();
+                            onAccepted: root.performSearch(text)
+                        }
+
+                        Button {
+                            text: "Search"
+                            icon.name: "edit-find"
+                            enabled: searchField.text.trim().length >= 2
+                            onClicked: root.performSearch(searchField.text)
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    Label { text: "Results"; font.bold: true; opacity: 0.8 }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        border.color: Qt.rgba(0.6, 0.6, 0.6, 1)
+                        color: "transparent"
+
+                        ListView {
+                            id: resultsList
+                            anchors.fill: parent
+                            clip: true
+                            model: root.searchResults
+                            currentIndex: searchPanel.selectedIndex
+
+                            delegate: Rectangle {
+                                required property var modelData
+                                required property int index
+
+                                width: ListView.view.width
+                                height: 44
+                                color: index === searchPanel.selectedIndex ? Kirigami.Theme.highlightColor : "transparent"
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 8
+                                    anchors.rightMargin: 8
+                                    anchors.topMargin: 4
+                                    spacing: 1
+
+                                    Label {
+                                        width: parent.width
+                                        text: {
+                                            if (modelData.display_name && modelData.display_name.length > 0) {
+                                                return modelData.display_name;
+                                            }
+                                            var admin = modelData.admin1 ? ", " + modelData.admin1 : "";
+                                            var country = modelData.country ? ", " + modelData.country : "";
+                                            return modelData.name + admin + country;
+                                        }
+                                        color: index === searchPanel.selectedIndex ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                                        elide: Text.ElideRight
+                                    }
+                                    Label {
+                                        width: parent.width
+                                        font.pixelSize: 10
+                                        opacity: 0.75
+                                        text: Number(modelData.latitude).toFixed(5) + ", " + Number(modelData.longitude).toFixed(5)
+                                        color: index === searchPanel.selectedIndex ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                                        elide: Text.ElideRight
+                                    }
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: {
+                                        searchPanel.selectedIndex = index;
+                                        searchPanel.selectedResult = modelData;
+                                        resultsList.currentIndex = index;
+                                    }
+                                    onDoubleClicked: {
+                                        searchPanel.selectedIndex = index;
+                                        searchPanel.selectedResult = modelData;
+                                        root.applySearchResult(modelData);
+                                        root.closeSearchPage();
+                                    }
+                                }
                             }
                         }
                     }
+
+                    Label {
+                        Layout.alignment: Qt.AlignRight
+                        text: "Double-click a result to apply and return"
+                        opacity: 0.72
+                    }
                 }
-            }
-        }
-
-        footer: DialogButtonBox {
-            alignment: Qt.AlignRight
-
-            Button {
-                text: "OK"
-                icon.name: "dialog-ok-apply"
-                enabled: searchDialog.selectedIndex >= 0
-                onClicked: {
-                    root.applySearchResult(searchDialog.selectedResult);
-                    searchDialog.close();
-                }
-            }
-
-            Button {
-                text: "Cancel"
-                icon.name: "dialog-cancel"
-                onClicked: searchDialog.close()
             }
         }
     }
