@@ -32,6 +32,8 @@ PlasmoidItem {
     readonly property bool isPanelFormFactor: (Plasmoid.formFactor === PlasmaCore.Types.Horizontal
         || Plasmoid.formFactor === PlasmaCore.Types.Vertical
         || Plasmoid.location !== PlasmaCore.Types.Floating)
+    readonly property bool useCompactPanelView: !Plasmoid.expanded
+        && (isPanelFormFactor || root.height <= 64 || root.width <= 220)
     readonly property string bundledOpenWeatherApiKey: "8003225e8825db83758c237068447229"
     readonly property string bundledWeatherApiKey: "601ba4ac57404ec29ff120510261802"
 
@@ -490,7 +492,7 @@ PlasmoidItem {
     Item {
         id: panelCollapsedView
         anchors.fill: parent
-        visible: root.isPanelFormFactor && !Plasmoid.expanded
+        visible: root.useCompactPanelView
 
         RowLayout {
             anchors.fill: parent
@@ -524,7 +526,7 @@ PlasmoidItem {
     Rectangle {
         anchors.fill: parent
         radius: 4
-        visible: !root.isPanelFormFactor || Plasmoid.expanded
+        visible: !root.useCompactPanelView
         color: Plasmoid.configuration.transparentBackground
             ? "transparent"
             : Qt.rgba(0.22, 0.16, 0.10, Math.max(0.0, Math.min(1, Plasmoid.configuration.panelOpacityPercent / 100)))
