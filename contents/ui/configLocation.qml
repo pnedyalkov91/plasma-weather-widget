@@ -16,12 +16,15 @@ KCM.SimpleKCM {
     property int cfg_altitude: 0
     property string cfg_timezone: ""
     property string cfg_altitudeUnit: "m"
+    property string cfg_weatherProvider: "adaptive"
 
     property var searchResults: []
     property bool autoDetectBusy: false
     property string autoDetectStatus: ""
     property string preferredLanguage: Qt.locale().name.split("_")[0]
     property string selectedProviderName: ""
+    readonly property string bundledOpenWeatherApiKey: "8003225e8825db83758c237068447229"
+    readonly property string bundledWeatherApiKey: "601ba4ac57404ec29ff120510261802"
     property bool searchBusy: false
     property int searchRequestId: 0
 
@@ -93,6 +96,7 @@ KCM.SimpleKCM {
 
         var q = query.trim();
         var requestLanguage = searchLanguageForQuery(q);
+        var selectedProvider = cfg_weatherProvider && cfg_weatherProvider.length > 0 ? cfg_weatherProvider : "adaptive";
         var requestId = ++searchRequestId;
         searchBusy = true;
         searchResults = [];
@@ -100,7 +104,11 @@ KCM.SimpleKCM {
         searchPanel.selectedIndex = -1;
         resultsList.currentIndex = -1;
         var collected = [];
-        var pending = 1;
+        var pending = 0;
+
+        function queueRequest() {
+            pending += 1;
+        }
 
         function done() {
             pending -= 1;
@@ -115,10 +123,8 @@ KCM.SimpleKCM {
             var finalList = [];
             for (var i = 0; i < collected.length; ++i) {
                 var item = collected[i];
-                if (item.providerKey && item.providerKey !== "open-meteo") {
-                    continue;
-                }
-                var key = item.name + "|" + Number(item.latitude).toFixed(4) + "|" + Number(item.longitude).toFixed(4);
+                var providerPart = item.providerKey ? item.providerKey : "unknown";
+                var key = item.name + "|" + Number(item.latitude).toFixed(4) + "|" + Number(item.longitude).toFixed(4) + "|" + providerPart;
                 if (dedup[key]) {
                     continue;
                 }
@@ -133,35 +139,127 @@ KCM.SimpleKCM {
             resultsList.currentIndex = -1;
         }
 
-        var openMeteoReq = new XMLHttpRequest();
-        var openMeteoEndpoint = "https://geocoding-api.open-meteo.com/v1/search?count=20&format=json&language="
-            + encodeURIComponent(requestLanguage)
-            + "&name="
-            + encodeURIComponent(q);
-        openMeteoReq.onreadystatechange = function() {
-            if (openMeteoReq.readyState !== XMLHttpRequest.DONE) {
-                return;
-            }
-            if (requestId !== searchRequestId) {
-                return;
-            }
-            if (openMeteoReq.status === 200) {
-                var data = JSON.parse(openMeteoReq.responseText);
-                var list = data.results ? data.results : [];
-                for (var i = 0; i < list.length; ++i) {
-                    list[i].provider = "Open-Meteo";
-                    list[i].providerKey = "open-meteo";
-                    var openMeteoAdmin = list[i].admin1 ? ", " + list[i].admin1 : "";
-                    var openMeteoCountry = list[i].country ? ", " + list[i].country : "";
-                    list[i].localizedDisplayName = (list[i].name ? list[i].name : "") + openMeteoAdmin + openMeteoCountry;
-                    collected.push(list[i]);
+        function fetchOpenMeteo() {
+            queueRequest();
+            var openMeteoReq = new XMLHttpRequest();
+            var openMeteoEndpoint = "https://geocoding-api.open-meteo.com/v1/search?count=20&format=json&language="
+                + encodeURIComponent(requestLanguage)
+                + "&name="
+                + encodeURIComponent(q);
+            openMeteoReq.onreadystatechange = function() {
+                if (openMeteoReq.readyState !== XMLHttpRequest.DONE) {
+                    return;
                 }
-            }
-            done();
-        };
-        openMeteoReq.open("GET", openMeteoEndpoint);
-        openMeteoReq.send();
+                if (requestId !== searchRequestId) {
+                    return;
+                }
+                if (openMeteoReq.status === 200) {
+                    var data = JSON.parse(openMeteoReq.responseText);
+                    var list = data.results ? data.results : [];
+                    for (var i = 0; i < list.length; ++i) {
+                        list[i].provider = "Open-Meteo";
+                        list[i].providerKey = "open-meteo";
+                        var openMeteoAdmin = list[i].admin1 ? ", " + list[i].admin1 : "";
+                        var openMeteoCountry = list[i].country ? ", " + list[i].country : "";
+                        list[i].localizedDisplayName = (list[i].name ? list[i].name : "") + openMeteoAdmin + openMeteoCountry;
+                        collected.push(list[i]);
+                    }
+                }
+                done();
+            };
+            openMeteoReq.open("GET", openMeteoEndpoint);
+            openMeteoReq.send();
+        }
 
+        function fetchOpenWeather() {
+            queueRequest();
+            var req = new XMLHttpRequest();
+            var endpoint = "https://api.openweathermap.org/geo/1.0/direct?limit=20&q="
+                + encodeURIComponent(q)
+                + "&appid="
+                + encodeURIComponent(bundledOpenWeatherApiKey);
+            req.onreadystatechange = function() {
+                if (req.readyState !== XMLHttpRequest.DONE) {
+                    return;
+                }
+                if (requestId !== searchRequestId) {
+                    return;
+                }
+                if (req.status === 200) {
+                    var list = JSON.parse(req.responseText);
+                    for (var i = 0; i < list.length; ++i) {
+                        var ow = list[i];
+                        var admin = ow.state ? ow.state : "";
+                        var country = ow.country ? ow.country : "";
+                        collected.push({
+                            name: ow.local_names && ow.local_names[requestLanguage] ? ow.local_names[requestLanguage] : ow.name,
+                            admin1: admin,
+                            country: country,
+                            latitude: parseFloat(ow.lat),
+                            longitude: parseFloat(ow.lon),
+                            timezone: "",
+                            provider: "OpenWeather",
+                            providerKey: "openWeather",
+                            localizedDisplayName: (ow.local_names && ow.local_names[requestLanguage] ? ow.local_names[requestLanguage] : ow.name)
+                                + (admin ? ", " + admin : "") + (country ? ", " + country : "")
+                        });
+                    }
+                }
+                done();
+            };
+            req.open("GET", endpoint);
+            req.send();
+        }
+
+        function fetchWeatherApi() {
+            queueRequest();
+            var req = new XMLHttpRequest();
+            var endpoint = "https://api.weatherapi.com/v1/search.json?key="
+                + encodeURIComponent(bundledWeatherApiKey)
+                + "&q="
+                + encodeURIComponent(q);
+            req.onreadystatechange = function() {
+                if (req.readyState !== XMLHttpRequest.DONE) {
+                    return;
+                }
+                if (requestId !== searchRequestId) {
+                    return;
+                }
+                if (req.status === 200) {
+                    var list = JSON.parse(req.responseText);
+                    for (var i = 0; i < list.length; ++i) {
+                        var wa = list[i];
+                        collected.push({
+                            name: wa.name,
+                            admin1: wa.region ? wa.region : "",
+                            country: wa.country ? wa.country : "",
+                            latitude: parseFloat(wa.lat),
+                            longitude: parseFloat(wa.lon),
+                            timezone: wa.tz_id ? wa.tz_id : "",
+                            provider: "WeatherAPI.com",
+                            providerKey: "weatherApi",
+                            localizedDisplayName: wa.name + (wa.region ? ", " + wa.region : "") + (wa.country ? ", " + wa.country : "")
+                        });
+                    }
+                }
+                done();
+            };
+            req.open("GET", endpoint);
+            req.send();
+        }
+
+        if (selectedProvider === "openWeather") {
+            fetchOpenWeather();
+        } else if (selectedProvider === "weatherApi") {
+            fetchWeatherApi();
+        } else if (selectedProvider === "adaptive") {
+            fetchOpenMeteo();
+            fetchOpenWeather();
+            fetchWeatherApi();
+        } else {
+            // met.no has no city-search API; fallback to Open-Meteo geocoding.
+            fetchOpenMeteo();
+        }
     }
 
     function reverseGeocode(lat, lon) {
@@ -570,7 +668,7 @@ KCM.SimpleKCM {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        border.color: Qt.rgba(0.6, 0.6, 0.6, 1)
+                        border.color: Kirigami.Theme.disabledTextColor
                         color: Qt.rgba(0.2, 0.2, 0.2, 0.45)
 
                         ListView {
