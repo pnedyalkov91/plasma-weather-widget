@@ -1,0 +1,20 @@
+{
+  "KPackageStructure": "Plasma/Applet",
+  "KPlugin": {
+    "Id": "org.example.plasma.weathercitylist",
+    "Name": "City List Weather",
+    "Description": "Resizable transparent CWP-style weather widget with side-tab settings",
+    "Icon": "weather-few-clouds",
+    "Category": "Online Services",
+    "License": "GPL-2.0-or-later",
+    "Authors": [
+      {
+        "Name": "Codex"
+      }
+    ],
+    "Version": "0.4.2",
+    "Website": "https://github.com/xfce-mirror/xfce4-weather-plugin"
+  },
+  "X-Plasma-API-Minimum-Version": "6.0",
+  "X-Plasma-MainScript": "ui/main.qml"
+}
