@@ -20,11 +20,42 @@ KCM.SimpleKCM {
     property var searchResults: []
     property bool autoDetectBusy: false
     property string autoDetectStatus: ""
+    property string preferredLanguage: Qt.locale().name.split("_")[0]
 
     property int pageIndex: 0
 
     function displayAltitudeUnit() {
         return cfg_altitudeUnit === "ft" ? "feet" : "meters";
+    }
+
+    function containsCyrillic(text) {
+        return text && /[Ѐ-ӿ]/.test(text);
+    }
+
+    function searchLanguageForQuery(query) {
+        var baseLanguage = preferredLanguage && preferredLanguage.length > 0 ? preferredLanguage : "en";
+        if (containsCyrillic(query)) {
+            return "bg";
+        }
+        return baseLanguage;
+    }
+
+    function formatResultTitle(item) {
+        if (!item) {
+            return "";
+        }
+        if (item.localizedDisplayName && item.localizedDisplayName.length > 0) {
+            return item.localizedDisplayName;
+        }
+
+        var admin = item.admin1 ? ", " + item.admin1 : "";
+        var country = item.country ? ", " + item.country : "";
+        var firstPart = item.name ? item.name : "";
+        if (firstPart.length > 0) {
+            return firstPart + admin + country;
+        }
+
+        return item.display_name ? item.display_name : "";
     }
 
     function openSearchPage() {
@@ -50,8 +81,9 @@ KCM.SimpleKCM {
         }
 
         var q = query.trim();
+        var requestLanguage = searchLanguageForQuery(q);
         var collected = [];
-        var pending = 2;
+        var pending = 1;
 
         function done() {
             pending -= 1;
@@ -78,7 +110,9 @@ KCM.SimpleKCM {
         }
 
         var openMeteoReq = new XMLHttpRequest();
-        var openMeteoEndpoint = "https://geocoding-api.open-meteo.com/v1/search?count=20&format=json&name="
+        var openMeteoEndpoint = "https://geocoding-api.open-meteo.com/v1/search?count=20&format=json&language="
+            + encodeURIComponent(requestLanguage)
+            + "&name="
             + encodeURIComponent(q);
         openMeteoReq.onreadystatechange = function() {
             if (openMeteoReq.readyState !== XMLHttpRequest.DONE) {
@@ -88,6 +122,11 @@ KCM.SimpleKCM {
                 var data = JSON.parse(openMeteoReq.responseText);
                 var list = data.results ? data.results : [];
                 for (var i = 0; i < list.length; ++i) {
+                    list[i].provider = "Open-Meteo";
+                    list[i].providerKey = "open-meteo";
+                    var openMeteoAdmin = list[i].admin1 ? ", " + list[i].admin1 : "";
+                    var openMeteoCountry = list[i].country ? ", " + list[i].country : "";
+                    list[i].localizedDisplayName = (list[i].name ? list[i].name : "") + openMeteoAdmin + openMeteoCountry;
                     collected.push(list[i]);
                 }
             }
@@ -96,40 +135,10 @@ KCM.SimpleKCM {
         openMeteoReq.open("GET", openMeteoEndpoint);
         openMeteoReq.send();
 
-        var nominatimReq = new XMLHttpRequest();
-        var nominatimEndpoint = "https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=20&q="
-            + encodeURIComponent(q);
-        nominatimReq.onreadystatechange = function() {
-            if (nominatimReq.readyState !== XMLHttpRequest.DONE) {
-                return;
-            }
-            if (nominatimReq.status === 200) {
-                var items = JSON.parse(nominatimReq.responseText);
-                for (var j = 0; j < items.length; ++j) {
-                    var n = items[j];
-                    var first = n.display_name ? n.display_name.split(",")[0].trim() : q;
-                    var country = n.address && n.address.country ? n.address.country : "";
-                    var admin = n.address && (n.address.state || n.address.county || n.address.municipality)
-                        ? (n.address.state || n.address.county || n.address.municipality)
-                        : "";
-                    collected.push({
-                        name: first,
-                        country: country,
-                        admin1: admin,
-                        latitude: parseFloat(n.lat),
-                        longitude: parseFloat(n.lon),
-                        timezone: "",
-                        display_name: n.display_name ? n.display_name : ""
-                    });
-                }
-            }
-            done();
-        };
-        nominatimReq.open("GET", nominatimEndpoint);
-        nominatimReq.send();
     }
 
     function reverseGeocode(lat, lon) {
+
         var metaReq = new XMLHttpRequest();
         var metaEndpoint = "https://api.open-meteo.com/v1/forecast?latitude="
             + encodeURIComponent(lat)
@@ -152,7 +161,9 @@ KCM.SimpleKCM {
         metaReq.send();
 
         var req = new XMLHttpRequest();
-        var endpoint = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1&lat="
+        var endpoint = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1&accept-language="
+            + encodeURIComponent(preferredLanguage + ",en")
+            + "&lat="
             + encodeURIComponent(lat)
             + "&lon="
             + encodeURIComponent(lon);
@@ -537,14 +548,7 @@ KCM.SimpleKCM {
 
                                     Label {
                                         width: parent.width
-                                        text: {
-                                            if (modelData.display_name && modelData.display_name.length > 0) {
-                                                return modelData.display_name;
-                                            }
-                                            var admin = modelData.admin1 ? ", " + modelData.admin1 : "";
-                                            var country = modelData.country ? ", " + modelData.country : "";
-                                            return modelData.name + admin + country;
-                                        }
+                                        text: root.formatResultTitle(modelData)
                                         color: index === searchPanel.selectedIndex ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
                                         elide: Text.ElideRight
                                     }
@@ -552,7 +556,8 @@ KCM.SimpleKCM {
                                         width: parent.width
                                         font.pixelSize: 10
                                         opacity: 0.75
-                                        text: Number(modelData.latitude).toFixed(5) + ", " + Number(modelData.longitude).toFixed(5)
+                                        text: "[" + (modelData.provider ? modelData.provider : "Unknown") + "] "
+                                            + Number(modelData.latitude).toFixed(5) + ", " + Number(modelData.longitude).toFixed(5)
                                         color: index === searchPanel.selectedIndex ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
                                         elide: Text.ElideRight
                                     }
