@@ -49,28 +49,84 @@ KCM.SimpleKCM {
             return;
         }
 
-        var req = new XMLHttpRequest();
-        var endpoint = "https://geocoding-api.open-meteo.com/v1/search?count=20&language=en&format=json&name="
-            + encodeURIComponent(query.trim());
-        req.onreadystatechange = function() {
-            if (req.readyState !== XMLHttpRequest.DONE) {
+        var q = query.trim();
+        var collected = [];
+        var pending = 2;
+
+        function done() {
+            pending -= 1;
+            if (pending > 0) {
                 return;
             }
-            if (req.status !== 200) {
-                searchResults = [];
-                searchPanel.selectedResult = null;
-                searchPanel.selectedIndex = -1;
-                resultsList.currentIndex = -1;
-                return;
+
+            var dedup = {};
+            var finalList = [];
+            for (var i = 0; i < collected.length; ++i) {
+                var item = collected[i];
+                var key = item.name + "|" + Number(item.latitude).toFixed(4) + "|" + Number(item.longitude).toFixed(4);
+                if (dedup[key]) {
+                    continue;
+                }
+                dedup[key] = true;
+                finalList.push(item);
             }
-            var data = JSON.parse(req.responseText);
-            searchResults = data.results ? data.results : [];
+
+            searchResults = finalList;
             searchPanel.selectedResult = null;
             searchPanel.selectedIndex = -1;
             resultsList.currentIndex = -1;
+        }
+
+        var openMeteoReq = new XMLHttpRequest();
+        var openMeteoEndpoint = "https://geocoding-api.open-meteo.com/v1/search?count=20&format=json&name="
+            + encodeURIComponent(q);
+        openMeteoReq.onreadystatechange = function() {
+            if (openMeteoReq.readyState !== XMLHttpRequest.DONE) {
+                return;
+            }
+            if (openMeteoReq.status === 200) {
+                var data = JSON.parse(openMeteoReq.responseText);
+                var list = data.results ? data.results : [];
+                for (var i = 0; i < list.length; ++i) {
+                    collected.push(list[i]);
+                }
+            }
+            done();
         };
-        req.open("GET", endpoint);
-        req.send();
+        openMeteoReq.open("GET", openMeteoEndpoint);
+        openMeteoReq.send();
+
+        var nominatimReq = new XMLHttpRequest();
+        var nominatimEndpoint = "https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=20&q="
+            + encodeURIComponent(q);
+        nominatimReq.onreadystatechange = function() {
+            if (nominatimReq.readyState !== XMLHttpRequest.DONE) {
+                return;
+            }
+            if (nominatimReq.status === 200) {
+                var items = JSON.parse(nominatimReq.responseText);
+                for (var j = 0; j < items.length; ++j) {
+                    var n = items[j];
+                    var first = n.display_name ? n.display_name.split(",")[0].trim() : q;
+                    var country = n.address && n.address.country ? n.address.country : "";
+                    var admin = n.address && (n.address.state || n.address.county || n.address.municipality)
+                        ? (n.address.state || n.address.county || n.address.municipality)
+                        : "";
+                    collected.push({
+                        name: first,
+                        country: country,
+                        admin1: admin,
+                        latitude: parseFloat(n.lat),
+                        longitude: parseFloat(n.lon),
+                        timezone: "",
+                        display_name: n.display_name ? n.display_name : ""
+                    });
+                }
+            }
+            done();
+        };
+        nominatimReq.open("GET", nominatimEndpoint);
+        nominatimReq.send();
     }
 
     function reverseGeocode(lat, lon) {
@@ -469,21 +525,37 @@ KCM.SimpleKCM {
                                 required property int index
 
                                 width: ListView.view.width
-                                height: 34
+                                height: 44
                                 color: index === searchPanel.selectedIndex ? Kirigami.Theme.highlightColor : "transparent"
 
-                                Label {
+                                Column {
                                     anchors.fill: parent
                                     anchors.leftMargin: 8
                                     anchors.rightMargin: 8
-                                    verticalAlignment: Text.AlignVCenter
-                                    text: {
-                                        var admin = modelData.admin1 ? ", " + modelData.admin1 : "";
-                                        var country = modelData.country ? ", " + modelData.country : "";
-                                        return modelData.name + admin + country;
+                                    anchors.topMargin: 4
+                                    spacing: 1
+
+                                    Label {
+                                        width: parent.width
+                                        text: {
+                                            if (modelData.display_name && modelData.display_name.length > 0) {
+                                                return modelData.display_name;
+                                            }
+                                            var admin = modelData.admin1 ? ", " + modelData.admin1 : "";
+                                            var country = modelData.country ? ", " + modelData.country : "";
+                                            return modelData.name + admin + country;
+                                        }
+                                        color: index === searchPanel.selectedIndex ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                                        elide: Text.ElideRight
                                     }
-                                    color: index === searchPanel.selectedIndex ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
-                                    elide: Text.ElideRight
+                                    Label {
+                                        width: parent.width
+                                        font.pixelSize: 10
+                                        opacity: 0.75
+                                        text: Number(modelData.latitude).toFixed(5) + ", " + Number(modelData.longitude).toFixed(5)
+                                        color: index === searchPanel.selectedIndex ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                                        elide: Text.ElideRight
+                                    }
                                 }
 
                                 MouseArea {

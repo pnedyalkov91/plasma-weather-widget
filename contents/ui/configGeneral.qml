@@ -6,8 +6,7 @@ import org.kde.kcmutils as KCM
 KCM.SimpleKCM {
     id: root
 
-    property string cfg_weatherProvider: "openMeteo"
-    property string cfg_openWeatherApiKey: ""
+    property string cfg_weatherProvider: "adaptive"
 
     ColumnLayout {
         anchors.fill: parent
@@ -16,7 +15,7 @@ KCM.SimpleKCM {
         Label {
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
-            text: "Choose which weather service to use for current conditions."
+            text: "Choose weather provider. Adaptive will automatically fallback to other providers if one is unavailable."
         }
 
         GridLayout {
@@ -30,8 +29,10 @@ KCM.SimpleKCM {
                 id: providerCombo
                 Layout.fillWidth: true
                 model: [
+                    { text: "Adaptive", value: "adaptive" },
                     { text: "Open-Meteo", value: "openMeteo" },
                     { text: "OpenWeather", value: "openWeather" },
+                    { text: "WeatherAPI.com", value: "weatherApi" },
                     { text: "met.no", value: "metno" }
                 ]
                 textRole: "text"
@@ -47,27 +48,13 @@ KCM.SimpleKCM {
 
                 onActivated: root.cfg_weatherProvider = model[currentIndex].value
             }
-
-            Label {
-                text: "OpenWeather API key:"
-                visible: root.cfg_weatherProvider === "openWeather"
-            }
-            TextField {
-                Layout.fillWidth: true
-                visible: root.cfg_weatherProvider === "openWeather"
-                placeholderText: "Enter OpenWeather API key"
-                echoMode: TextInput.Password
-                text: root.cfg_openWeatherApiKey
-                onTextChanged: root.cfg_openWeatherApiKey = text
-            }
         }
 
         Label {
             Layout.fillWidth: true
-            visible: root.cfg_weatherProvider === "openWeather"
             wrapMode: Text.WordWrap
             opacity: 0.8
-            text: "OpenWeather requires an API key. Without it, weather updates will be skipped."
+            text: "OpenWeather and WeatherAPI.com are preconfigured in this widget build with bundled API keys."
         }
 
         Item { Layout.fillHeight: true }

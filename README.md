@@ -30,8 +30,10 @@ plasmashell --replace
 
 ## Recent fixes
 
-- Added a new **General** settings side-tab to select weather provider: Open-Meteo, OpenWeather, or met.no.
-- OpenWeather provider now supports API key configuration from settings.
+- Added **Adaptive** provider mode with automatic fallback across Open-Meteo, OpenWeather, WeatherAPI.com, and met.no.
+- Added built-in provider support for **WeatherAPI.com** and bundled provider keys for OpenWeather/WeatherAPI builds.
+- Improved location search to better return non-Latin town names (e.g. Cyrillic like `Царевци`) by combining Open-Meteo and Nominatim results.
+- Added a new **General** settings side-tab to select weather provider: Adaptive, Open-Meteo, OpenWeather, WeatherAPI.com, or met.no.
 - Default location mode is now **Automatically detect location**.
 - Main widget now shows an empty-state with a **Select town** button when no location is configured.
 - Removed hardcoded default city values (location/timezone/coordinates now start empty/zero for a clean first-time setup).
