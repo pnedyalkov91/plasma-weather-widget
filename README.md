@@ -6,23 +6,18 @@ KDE Plasma 6 weather widget inspired by classic CWP visuals and XFCE weather set
 
 - Resizable layout with forecast tiles that remain visible when the widget size changes.
 - Transparent panel with configurable opacity.
-- CWP-inspired structure:
-  - location title,
-  - optional scrollbox,
-  - left current-conditions panel,
-  - right large temperature + details,
-  - forecast day tiles.
-- Settings pages are now exposed as **side tabs/categories** in Plasma config:
+- CWP-inspired structure with location title, optional scrollbox, current conditions, and forecast tiles.
+- Settings pages are exposed as side categories:
   - Location
   - Units
   - Appearance
   - Scrollbox
 
-## Location selection
+## Location UI refactor
 
-Location is selected from **Settings → Location**:
-- search by city,
-- or manually set location name + latitude + longitude + timezone.
+- The Location page now follows XFCE-style structure with a guidance panel and aligned fields.
+- Added a **Change...** button that opens a dedicated **Search location** dialog.
+- Search dialog lets you query cities and apply the selected result (name, coordinates, timezone, elevation).
 
 ## Install / update
 
