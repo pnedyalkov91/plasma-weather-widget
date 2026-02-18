@@ -8,7 +8,6 @@ import org.kde.kirigami as Kirigami
 KCM.SimpleKCM {
     id: root
 
-    buttons: KCM.ConfigModule.NoAdditionalButton
 
     property bool cfg_autoDetectLocation: false
     property string cfg_locationName: "London, United Kingdom"

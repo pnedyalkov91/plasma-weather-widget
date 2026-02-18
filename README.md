@@ -30,6 +30,7 @@ plasmashell --replace
 
 ## Recent fixes
 
+- Fixed Plasma compatibility issue in Location page by removing unsupported `buttons` property assignment from `KCM.SimpleKCM`.
 - Location search now auto-updates results while typing (debounced), with a compact search field and adjacent Search button.
 - Removed in-panel OK/Cancel controls in the search page; use Back or double-click a result to apply.
 - Refactored the Location page transition to use an action-driven slide workflow (Kirigami `ActionToolBar`) instead of a popup-like mini window.
