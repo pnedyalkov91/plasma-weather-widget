@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtPositioning
 import org.kde.kcmutils as KCM
 
 KCM.SimpleKCM {
@@ -15,6 +16,8 @@ KCM.SimpleKCM {
     property string cfg_altitudeUnit: "m"
 
     property var searchResults: []
+    property bool autoDetectBusy: false
+    property string autoDetectStatus: ""
 
     function displayAltitudeUnit() {
         return cfg_altitudeUnit === "ft" ? "feet" : "meters";
@@ -51,6 +54,64 @@ KCM.SimpleKCM {
         req.send();
     }
 
+    function reverseGeocode(lat, lon) {
+        var req = new XMLHttpRequest();
+        var endpoint = "https://geocoding-api.open-meteo.com/v1/reverse?latitude="
+            + encodeURIComponent(lat)
+            + "&longitude="
+            + encodeURIComponent(lon)
+            + "&language=en&format=json";
+
+        req.onreadystatechange = function() {
+            if (req.readyState !== XMLHttpRequest.DONE) {
+                return;
+            }
+
+            if (req.status !== 200) {
+                autoDetectBusy = false;
+                autoDetectStatus = "Auto-detection updated coordinates.";
+                return;
+            }
+
+            var data = JSON.parse(req.responseText);
+            if (data.results && data.results.length > 0) {
+                var r = data.results[0];
+                cfg_locationName = r.name + ", " + (r.country ? r.country : "");
+                if (r.timezone) {
+                    cfg_timezone = r.timezone;
+                }
+                if (r.elevation !== undefined) {
+                    cfg_altitude = Math.round(r.elevation);
+                }
+                autoDetectStatus = "Auto-detected via GeoClue2.";
+            } else {
+                autoDetectStatus = "Auto-detection updated coordinates.";
+            }
+            autoDetectBusy = false;
+        };
+
+        req.open("GET", endpoint);
+        req.send();
+    }
+
+    function refreshAutoDetectedLocation() {
+        if (!cfg_autoDetectLocation) {
+            autoDetectBusy = false;
+            return;
+        }
+
+        autoDetectBusy = true;
+        autoDetectStatus = "Requesting location from GeoClue2…";
+
+        if (!positionSource.supportedPositioningMethods) {
+            autoDetectBusy = false;
+            autoDetectStatus = "GeoClue2 location unavailable on this system.";
+            return;
+        }
+
+        positionSource.update();
+    }
+
     function applySearchResult(item) {
         if (!item) {
             return;
@@ -62,6 +123,49 @@ KCM.SimpleKCM {
         cfg_timezone = item.timezone ? item.timezone : cfg_timezone;
         if (item.elevation !== undefined) {
             cfg_altitude = Math.round(item.elevation);
+        }
+    }
+
+    onCfg_autoDetectLocationChanged: {
+        if (cfg_autoDetectLocation) {
+            refreshAutoDetectedLocation();
+        } else {
+            autoDetectBusy = false;
+            autoDetectStatus = "";
+        }
+    }
+
+    PositionSource {
+        id: positionSource
+        active: root.cfg_autoDetectLocation
+        updateInterval: 300000
+
+        onPositionChanged: {
+            if (!root.cfg_autoDetectLocation) {
+                return;
+            }
+
+            var c = position.coordinate;
+            if (!c || !c.isValid) {
+                root.autoDetectBusy = false;
+                root.autoDetectStatus = "Unable to get valid position from GeoClue2.";
+                return;
+            }
+
+            root.cfg_latitude = c.latitude;
+            root.cfg_longitude = c.longitude;
+            if (c.altitude && !isNaN(c.altitude)) {
+                root.cfg_altitude = Math.round(c.altitude);
+            }
+
+            root.reverseGeocode(c.latitude, c.longitude);
+        }
+
+        onSourceErrorChanged: {
+            if (sourceError !== PositionSource.NoError) {
+                root.autoDetectBusy = false;
+                root.autoDetectStatus = "GeoClue2 error while retrieving location.";
+            }
         }
     }
 
@@ -93,6 +197,10 @@ KCM.SimpleKCM {
             }
         }
 
+        ButtonGroup {
+            id: locationModeGroup
+        }
+
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 4
@@ -100,15 +208,25 @@ KCM.SimpleKCM {
             RadioButton {
                 text: "Automatically detect location"
                 checked: root.cfg_autoDetectLocation
-                onToggled: if (checked) root.cfg_autoDetectLocation = true
+                ButtonGroup.group: locationModeGroup
+                onClicked: root.cfg_autoDetectLocation = true
             }
 
-            Label {
-                Layout.fillWidth: true
+            RowLayout {
                 Layout.leftMargin: 24
-                wrapMode: Text.WordWrap
-                text: "Geolocation can be provided by KDE/GeoClue2 depending on system configuration and permissions."
-                opacity: 0.75
+                spacing: 8
+                Label {
+                    text: root.autoDetectBusy ? "Detecting…" : (root.autoDetectStatus.length > 0 ? root.autoDetectStatus : "GeoLocation can be provided by KDE/GeoClue2 depending on system configuration and permissions.")
+                    opacity: 0.78
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                }
+                Button {
+                    text: "Refresh"
+                    enabled: root.cfg_autoDetectLocation && !root.autoDetectBusy
+                    visible: root.cfg_autoDetectLocation
+                    onClicked: root.refreshAutoDetectedLocation()
+                }
             }
 
             RowLayout {
@@ -116,7 +234,8 @@ KCM.SimpleKCM {
                 RadioButton {
                     text: "Use manual location"
                     checked: !root.cfg_autoDetectLocation
-                    onToggled: if (checked) root.cfg_autoDetectLocation = false
+                    ButtonGroup.group: locationModeGroup
+                    onClicked: root.cfg_autoDetectLocation = false
                 }
                 Label { text: "Latitude:"; opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0 }
                 Label { text: Number(root.cfg_latitude).toFixed(2); opacity: root.cfg_autoDetectLocation ? 0.45 : 1.0 }
