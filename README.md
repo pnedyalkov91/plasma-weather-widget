@@ -33,3 +33,5 @@ plasmashell --replace
 - Made the city search input field explicitly visible in dark themes.
 - Added clear row highlight for selected city in search results.
 - Disabled **OK** in the search dialog until a city is selected (Cancel remains available).
+- Fixed city selection highlighting in the search results list.
+- Restored dialog button order/icons (OK then Cancel) and made OK clearly enabled only after selection.

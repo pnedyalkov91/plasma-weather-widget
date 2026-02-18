@@ -23,6 +23,7 @@ KCM.SimpleKCM {
         if (!query || query.trim().length < 2) {
             searchResults = [];
             searchDialog.selectedResult = null;
+            searchDialog.selectedIndex = -1;
             return;
         }
 
@@ -36,11 +37,13 @@ KCM.SimpleKCM {
             if (req.status !== 200) {
                 searchResults = [];
                 searchDialog.selectedResult = null;
+                searchDialog.selectedIndex = -1;
                 return;
             }
             var data = JSON.parse(req.responseText);
             searchResults = data.results ? data.results : [];
             searchDialog.selectedResult = null;
+            searchDialog.selectedIndex = -1;
             resultsList.currentIndex = -1;
         };
         req.open("GET", endpoint);
@@ -178,9 +181,11 @@ KCM.SimpleKCM {
         height: 540
 
         property var selectedResult: null
+        property int selectedIndex: -1
 
         onOpened: {
             selectedResult = null;
+            selectedIndex = -1;
             resultsList.currentIndex = -1;
         }
 
@@ -200,6 +205,7 @@ KCM.SimpleKCM {
                     Layout.fillWidth: true
                     placeholderText: "Vienna"
                     selectByMouse: true
+                    color: "white"
                     background: Rectangle {
                         radius: 4
                         color: Qt.rgba(0.10, 0.10, 0.10, 0.35)
@@ -209,6 +215,7 @@ KCM.SimpleKCM {
                 }
                 Button {
                     text: "Search"
+                    icon.name: "edit-find"
                     onClicked: root.performSearch(searchField.text)
                 }
             }
@@ -230,21 +237,23 @@ KCM.SimpleKCM {
                     anchors.fill: parent
                     clip: true
                     model: root.searchResults
+                    currentIndex: searchDialog.selectedIndex
 
-                    delegate: ItemDelegate {
+                    delegate: Rectangle {
                         required property var modelData
                         required property int index
 
                         width: ListView.view.width
-                        highlighted: ListView.isCurrentItem
+                        height: 34
+                        color: index === searchDialog.selectedIndex
+                            ? Qt.rgba(0.24, 0.52, 0.91, 0.9)
+                            : "transparent"
 
-                        background: Rectangle {
-                            color: ListView.isCurrentItem
-                                ? Qt.rgba(0.24, 0.52, 0.91, 0.9)
-                                : "transparent"
-                        }
-
-                        contentItem: Label {
+                        Label {
+                            anchors.fill: parent
+                            anchors.leftMargin: 8
+                            anchors.rightMargin: 8
+                            verticalAlignment: Text.AlignVCenter
                             text: {
                                 var admin = modelData.admin1 ? ", " + modelData.admin1 : "";
                                 var country = modelData.country ? ", " + modelData.country : "";
@@ -252,12 +261,21 @@ KCM.SimpleKCM {
                             }
                             color: "white"
                             elide: Text.ElideRight
-                            verticalAlignment: Text.AlignVCenter
                         }
 
-                        onClicked: {
-                            resultsList.currentIndex = index;
-                            searchDialog.selectedResult = modelData;
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: {
+                                searchDialog.selectedIndex = index;
+                                searchDialog.selectedResult = modelData;
+                                resultsList.currentIndex = index;
+                            }
+                            onDoubleClicked: {
+                                searchDialog.selectedIndex = index;
+                                searchDialog.selectedResult = modelData;
+                                root.applySearchResult(modelData);
+                                searchDialog.close();
+                            }
                         }
                     }
                 }
@@ -268,17 +286,19 @@ KCM.SimpleKCM {
             alignment: Qt.AlignRight
 
             Button {
-                text: "Cancel"
-                onClicked: searchDialog.close()
-            }
-
-            Button {
                 text: "OK"
-                enabled: searchDialog.selectedResult !== null
+                icon.name: "dialog-ok-apply"
+                enabled: searchDialog.selectedIndex >= 0
                 onClicked: {
                     root.applySearchResult(searchDialog.selectedResult);
                     searchDialog.close();
                 }
+            }
+
+            Button {
+                text: "Cancel"
+                icon.name: "dialog-cancel"
+                onClicked: searchDialog.close()
             }
         }
     }
