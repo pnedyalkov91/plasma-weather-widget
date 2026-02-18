@@ -72,7 +72,7 @@ KCM.SimpleKCM {
 
     function selectedProviderDisplayName() {
         if (cfg_weatherProvider === "adaptive") {
-            return "All";
+            return "Adaptive";
         }
         if (cfg_weatherProvider === "openWeather") {
             return "OpenWeather";
@@ -84,6 +84,13 @@ KCM.SimpleKCM {
             return "met.no";
         }
         return "Open-Meteo";
+    }
+
+    function currentLocationDisplayName() {
+        if (searchPanel.selectedResult) {
+            return root.formatResultTitle(searchPanel.selectedResult);
+        }
+        return root.cfg_locationName && root.cfg_locationName.length > 0 ? root.cfg_locationName : "None Selected";
     }
 
     function openSearchPage() {
@@ -629,7 +636,7 @@ KCM.SimpleKCM {
                         }
 
                         Label {
-                            text: "Search location"
+                            text: "Enter Location"
                             font.bold: true
                             font.pixelSize: 16
                         }
@@ -642,7 +649,7 @@ KCM.SimpleKCM {
                         spacing: 2
 
                         Label {
-                            text: "Location:  " + (searchPanel.selectedResult ? root.formatResultTitle(searchPanel.selectedResult) : root.cfg_locationName)
+                            text: "Location:  " + root.currentLocationDisplayName()
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
@@ -662,7 +669,7 @@ KCM.SimpleKCM {
                         TextField {
                             id: searchField
                             Layout.fillWidth: true
-                            placeholderText: "Search city"
+                            placeholderText: "Enter Location"
                             selectByMouse: true
                             onTextChanged: {
                                 searchPanel.selectedResult = null;
@@ -689,11 +696,9 @@ KCM.SimpleKCM {
                         }
                     }
 
-                    Rectangle {
+                    Item {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        border.color: Kirigami.Theme.disabledTextColor
-                        color: Qt.rgba(0.2, 0.2, 0.2, 0.45)
 
                         ListView {
                             id: resultsList
@@ -743,7 +748,7 @@ KCM.SimpleKCM {
                             anchors.centerIn: parent
                             width: parent.width - 32
                             spacing: 10
-                            visible: root.searchBusy || (searchField.text.trim().length >= 2 && root.searchResults.length === 0)
+                            visible: root.searchBusy || root.searchResults.length === 0
 
                             BusyIndicator {
                                 anchors.horizontalCenter: parent.horizontalCenter
@@ -753,7 +758,11 @@ KCM.SimpleKCM {
 
                             Label {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                text: root.searchBusy ? "Loading locations…" : "No weather stations found for '" + searchField.text.trim() + "'"
+                                text: root.searchBusy
+                                    ? "Loading locations…"
+                                    : (searchField.text.trim().length < 2
+                                        ? "Search a weather station to set your location"
+                                        : "No weather stations found for '" + searchField.text.trim() + "'")
                                 font.pixelSize: root.searchBusy ? 18 : 30
                                 font.bold: true
                                 horizontalAlignment: Text.AlignHCenter
@@ -763,7 +772,7 @@ KCM.SimpleKCM {
                             }
 
                             Label {
-                                visible: !root.searchBusy
+                                visible: !root.searchBusy && searchField.text.trim().length >= 2
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 text: "If you've used this weather station in the past, it's possible that a server outage at the weather station provider has made it temporarily unavailable. Try again later."
                                 width: parent.width
