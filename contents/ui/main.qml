@@ -78,6 +78,11 @@ PlasmoidItem {
             }
         }
 
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton
+            onClicked: Plasmoid.expanded = true
+        }
     }
 
     function weatherCodeToText(code) {
@@ -520,6 +525,12 @@ PlasmoidItem {
                     return city + (info.length > 0 ? ", " + info : "");
                 }
             }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton
+            onClicked: Plasmoid.expanded = true
         }
     }
 
