@@ -16,11 +16,16 @@ KCM.SimpleKCM {
     property int cfg_altitude: 0
     property string cfg_timezone: ""
     property string cfg_altitudeUnit: "m"
+    property string cfg_weatherProvider: "adaptive"
 
     property var searchResults: []
     property bool autoDetectBusy: false
     property string autoDetectStatus: ""
     property string preferredLanguage: Qt.locale().name.split("_")[0]
+    readonly property string bundledOpenWeatherApiKey: "8003225e8825db83758c237068447229"
+    readonly property string bundledWeatherApiKey: "601ba4ac57404ec29ff120510261802"
+    property bool searchBusy: false
+    property int searchRequestId: 0
 
     property int pageIndex: 0
 
@@ -38,28 +43,6 @@ KCM.SimpleKCM {
             return "bg";
         }
         return baseLanguage;
-    }
-
-    function localizedNameFromNamedetails(namedetails, language) {
-        if (!namedetails) {
-            return "";
-        }
-
-        var preferredKey = "name:" + language;
-        if (namedetails[preferredKey] && namedetails[preferredKey].length > 0) {
-            return namedetails[preferredKey];
-        }
-
-        if (namedetails.name && namedetails.name.length > 0) {
-            return namedetails.name;
-        }
-
-        for (var key in namedetails) {
-            if (key.indexOf("name:") === 0 && containsCyrillic(namedetails[key])) {
-                return namedetails[key];
-            }
-        }
-        return "";
     }
 
     function formatResultTitle(item) {
@@ -80,17 +63,45 @@ KCM.SimpleKCM {
         return item.display_name ? item.display_name : "";
     }
 
+    function formatResultListItem(item) {
+        var title = formatResultTitle(item);
+        var provider = item && item.provider ? item.provider : "Unknown provider";
+        return title + " (" + provider + ")";
+    }
+
+    function selectedProviderDisplayName() {
+        if (cfg_weatherProvider === "adaptive") {
+            return "Adaptive";
+        }
+        if (cfg_weatherProvider === "openWeather") {
+            return "OpenWeather";
+        }
+        if (cfg_weatherProvider === "weatherApi") {
+            return "WeatherAPI.com";
+        }
+        if (cfg_weatherProvider === "metno") {
+            return "met.no";
+        }
+        return "Open-Meteo";
+    }
+
+    function currentLocationDisplayName() {
+        return root.cfg_locationName && root.cfg_locationName.length > 0 ? root.cfg_locationName : "None Selected";
+    }
+
     function openSearchPage() {
         searchPanel.selectedResult = null;
         searchPanel.selectedIndex = -1;
         resultsList.currentIndex = -1;
-        searchField.text = root.cfg_locationName.split(",")[0].trim();
-        root.performSearch(searchField.text);
+        searchField.text = "";
+        searchResults = [];
+        searchBusy = false;
         root.pageIndex = 1;
     }
 
     function closeSearchPage() {
         root.pageIndex = 0;
+        searchBusy = false;
     }
 
     function performSearch(query) {
@@ -99,18 +110,32 @@ KCM.SimpleKCM {
             searchPanel.selectedResult = null;
             searchPanel.selectedIndex = -1;
             resultsList.currentIndex = -1;
+            searchBusy = false;
             return;
         }
 
         var q = query.trim();
         var requestLanguage = searchLanguageForQuery(q);
-        var nominatimLanguage = requestLanguage + ",en";
+        var selectedProvider = cfg_weatherProvider && cfg_weatherProvider.length > 0 ? cfg_weatherProvider : "adaptive";
+        var requestId = ++searchRequestId;
+        searchBusy = true;
+        searchResults = [];
+        searchPanel.selectedResult = null;
+        searchPanel.selectedIndex = -1;
+        resultsList.currentIndex = -1;
         var collected = [];
-        var pending = 2;
+        var pending = 0;
+
+        function queueRequest() {
+            pending += 1;
+        }
 
         function done() {
             pending -= 1;
             if (pending > 0) {
+                return;
+            }
+            if (requestId !== searchRequestId) {
                 return;
             }
 
@@ -118,7 +143,8 @@ KCM.SimpleKCM {
             var finalList = [];
             for (var i = 0; i < collected.length; ++i) {
                 var item = collected[i];
-                var key = item.name + "|" + Number(item.latitude).toFixed(4) + "|" + Number(item.longitude).toFixed(4);
+                var providerPart = item.providerKey ? item.providerKey : "unknown";
+                var key = item.name + "|" + Number(item.latitude).toFixed(4) + "|" + Number(item.longitude).toFixed(4) + "|" + providerPart;
                 if (dedup[key]) {
                     continue;
                 }
@@ -127,80 +153,141 @@ KCM.SimpleKCM {
             }
 
             searchResults = finalList;
+            searchBusy = false;
             searchPanel.selectedResult = null;
             searchPanel.selectedIndex = -1;
             resultsList.currentIndex = -1;
         }
 
-        var openMeteoReq = new XMLHttpRequest();
-        var openMeteoEndpoint = "https://geocoding-api.open-meteo.com/v1/search?count=20&format=json&language="
-            + encodeURIComponent(requestLanguage)
-            + "&name="
-            + encodeURIComponent(q);
-        openMeteoReq.onreadystatechange = function() {
-            if (openMeteoReq.readyState !== XMLHttpRequest.DONE) {
-                return;
-            }
-            if (openMeteoReq.status === 200) {
-                var data = JSON.parse(openMeteoReq.responseText);
-                var list = data.results ? data.results : [];
-                for (var i = 0; i < list.length; ++i) {
-                    list[i].provider = "Open-Meteo";
-                    list[i].providerKey = "open-meteo";
-                    var openMeteoAdmin = list[i].admin1 ? ", " + list[i].admin1 : "";
-                    var openMeteoCountry = list[i].country ? ", " + list[i].country : "";
-                    list[i].localizedDisplayName = (list[i].name ? list[i].name : "") + openMeteoAdmin + openMeteoCountry;
-                    collected.push(list[i]);
+        function fetchOpenMeteo() {
+            queueRequest();
+            var openMeteoReq = new XMLHttpRequest();
+            var openMeteoEndpoint = "https://geocoding-api.open-meteo.com/v1/search?count=20&format=json&language="
+                + encodeURIComponent(requestLanguage)
+                + "&name="
+                + encodeURIComponent(q);
+            openMeteoReq.onreadystatechange = function() {
+                if (openMeteoReq.readyState !== XMLHttpRequest.DONE) {
+                    return;
                 }
-            }
-            done();
-        };
-        openMeteoReq.open("GET", openMeteoEndpoint);
-        openMeteoReq.send();
-
-        var nominatimReq = new XMLHttpRequest();
-        var nominatimEndpoint = "https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&namedetails=1&limit=20&accept-language="
-            + encodeURIComponent(nominatimLanguage)
-            + "&q="
-            + encodeURIComponent(q);
-        nominatimReq.onreadystatechange = function() {
-            if (nominatimReq.readyState !== XMLHttpRequest.DONE) {
-                return;
-            }
-            if (nominatimReq.status === 200) {
-                var items = JSON.parse(nominatimReq.responseText);
-                for (var j = 0; j < items.length; ++j) {
-                    var n = items[j];
-                    var localizedName = localizedNameFromNamedetails(n.namedetails, requestLanguage);
-                    var first = n.display_name ? n.display_name.split(",")[0].trim() : q;
-                    if (localizedName && localizedName.length > 0) {
-                        first = localizedName;
+                if (requestId !== searchRequestId) {
+                    return;
+                }
+                if (openMeteoReq.status === 200) {
+                    var data = JSON.parse(openMeteoReq.responseText);
+                    var list = data.results ? data.results : [];
+                    for (var i = 0; i < list.length; ++i) {
+                        list[i].provider = "Open-Meteo";
+                        list[i].providerKey = "open-meteo";
+                        var openMeteoAdmin = list[i].admin1 ? ", " + list[i].admin1 : "";
+                        var openMeteoCountry = list[i].country ? ", " + list[i].country : "";
+                        list[i].localizedDisplayName = (list[i].name ? list[i].name : "") + openMeteoAdmin + openMeteoCountry;
+                        collected.push(list[i]);
                     }
-                    var country = n.address && n.address.country ? n.address.country : "";
-                    var admin = n.address && (n.address.state || n.address.county || n.address.municipality)
-                        ? (n.address.state || n.address.county || n.address.municipality)
-                        : "";
-                    collected.push({
-                        name: first,
-                        country: country,
-                        admin1: admin,
-                        latitude: parseFloat(n.lat),
-                        longitude: parseFloat(n.lon),
-                        timezone: "",
-                        display_name: n.display_name ? n.display_name : "",
-                        localizedDisplayName: first + (admin ? ", " + admin : "") + (country ? ", " + country : ""),
-                        provider: "Nominatim (OSM)",
-                        providerKey: "nominatim"
-                    });
                 }
-            }
-            done();
-        };
-        nominatimReq.open("GET", nominatimEndpoint);
-        nominatimReq.send();
+                done();
+            };
+            openMeteoReq.open("GET", openMeteoEndpoint);
+            openMeteoReq.send();
+        }
+
+        function fetchOpenWeather() {
+            queueRequest();
+            var req = new XMLHttpRequest();
+            var endpoint = "https://api.openweathermap.org/geo/1.0/direct?limit=20&q="
+                + encodeURIComponent(q)
+                + "&appid="
+                + encodeURIComponent(bundledOpenWeatherApiKey);
+            req.onreadystatechange = function() {
+                if (req.readyState !== XMLHttpRequest.DONE) {
+                    return;
+                }
+                if (requestId !== searchRequestId) {
+                    return;
+                }
+                if (req.status === 200) {
+                    var list = JSON.parse(req.responseText);
+                    for (var i = 0; i < list.length; ++i) {
+                        var ow = list[i];
+                        var admin = ow.state ? ow.state : "";
+                        var country = ow.country ? ow.country : "";
+                        collected.push({
+                            name: ow.local_names && ow.local_names[requestLanguage] ? ow.local_names[requestLanguage] : ow.name,
+                            admin1: admin,
+                            country: country,
+                            latitude: parseFloat(ow.lat),
+                            longitude: parseFloat(ow.lon),
+                            timezone: "",
+                            provider: "OpenWeather",
+                            providerKey: "openWeather",
+                            localizedDisplayName: (ow.local_names && ow.local_names[requestLanguage] ? ow.local_names[requestLanguage] : ow.name)
+                                + (admin ? ", " + admin : "") + (country ? ", " + country : "")
+                        });
+                    }
+                }
+                done();
+            };
+            req.open("GET", endpoint);
+            req.send();
+        }
+
+        function fetchWeatherApi() {
+            queueRequest();
+            var req = new XMLHttpRequest();
+            var endpoint = "https://api.weatherapi.com/v1/search.json?key="
+                + encodeURIComponent(bundledWeatherApiKey)
+                + "&q="
+                + encodeURIComponent(q);
+            req.onreadystatechange = function() {
+                if (req.readyState !== XMLHttpRequest.DONE) {
+                    return;
+                }
+                if (requestId !== searchRequestId) {
+                    return;
+                }
+                if (req.status === 200) {
+                    var list = JSON.parse(req.responseText);
+                    for (var i = 0; i < list.length; ++i) {
+                        var wa = list[i];
+                        collected.push({
+                            name: wa.name,
+                            admin1: wa.region ? wa.region : "",
+                            country: wa.country ? wa.country : "",
+                            latitude: parseFloat(wa.lat),
+                            longitude: parseFloat(wa.lon),
+                            timezone: wa.tz_id ? wa.tz_id : "",
+                            provider: "WeatherAPI.com",
+                            providerKey: "weatherApi",
+                            localizedDisplayName: wa.name + (wa.region ? ", " + wa.region : "") + (wa.country ? ", " + wa.country : "")
+                        });
+                    }
+                }
+                done();
+            };
+            req.open("GET", endpoint);
+            req.send();
+        }
+
+        if (selectedProvider === "openMeteo") {
+            fetchOpenMeteo();
+        } else if (selectedProvider === "openWeather") {
+            fetchOpenWeather();
+        } else if (selectedProvider === "weatherApi") {
+            fetchWeatherApi();
+        } else if (selectedProvider === "adaptive") {
+            fetchOpenMeteo();
+            fetchOpenWeather();
+            fetchWeatherApi();
+        } else if (selectedProvider === "metno") {
+            // met.no location lookup uses Open-Meteo geocoding in this search UI.
+            fetchOpenMeteo();
+        } else {
+            searchBusy = false;
+        }
     }
 
     function reverseGeocode(lat, lon) {
+
         var metaReq = new XMLHttpRequest();
         var metaEndpoint = "https://api.open-meteo.com/v1/forecast?latitude="
             + encodeURIComponent(lat)
@@ -328,7 +415,7 @@ KCM.SimpleKCM {
 
     Timer {
         id: searchDebounce
-        interval: 260
+        interval: 120
         repeat: false
         onTriggered: root.performSearch(searchField.text)
     }
@@ -357,25 +444,6 @@ KCM.SimpleKCM {
                 ColumnLayout {
                     anchors.fill: parent
                     spacing: 10
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        implicitHeight: 74
-                        color: Qt.rgba(0.88, 0.85, 0.80, 0.65)
-                        radius: 3
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.margins: 10
-                            spacing: 10
-                            Label { text: "ℹ"; font.pixelSize: 18 }
-                            Label {
-                                Layout.fillWidth: true
-                                wrapMode: Text.WordWrap
-                                text: "Please change location name to your liking and correct altitude and timezone if they are not auto-detected correctly."
-                            }
-                        }
-                    }
 
                     ButtonGroup { id: locationModeGroup }
 
@@ -541,7 +609,7 @@ KCM.SimpleKCM {
                         }
 
                         Label {
-                            text: "Search location"
+                            text: "Enter Location"
                             font.bold: true
                             font.pixelSize: 16
                         }
@@ -549,42 +617,59 @@ KCM.SimpleKCM {
                         Item { Layout.fillWidth: true }
                     }
 
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+
+                        Label {
+                            text: "Location:  " + root.currentLocationDisplayName()
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                        Label {
+                            text: "Provider:  " + root.selectedProviderDisplayName()
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                    }
+
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 8
+                        spacing: 6
 
                         TextField {
                             id: searchField
-                            Layout.preferredWidth: Math.min(460, searchPanel.width * 2.72)
                             Layout.fillWidth: true
-                            placeholderText: ""
+                            placeholderText: "Enter Location"
                             selectByMouse: true
-                            onTextEdited: {
+                            onTextChanged: {
                                 searchPanel.selectedResult = null;
                                 searchPanel.selectedIndex = -1;
                                 resultsList.currentIndex = -1;
+                                if (text.trim().length < 2) {
+                                    root.searchResults = [];
+                                    root.searchBusy = false;
+                                    return;
+                                }
                                 searchDebounce.restart();
                             }
                             onAccepted: root.performSearch(text)
                         }
 
-                        Button {
-                            text: "Search"
-                            icon.name: "edit-find"
-                            enabled: searchField.text.trim().length >= 2
-                            onClicked: root.performSearch(searchField.text)
+                        ToolButton {
+                            text: "✕"
+                            visible: searchField.text.length > 0
+                            onClicked: {
+                                searchField.clear();
+                                root.searchResults = [];
+                                root.searchBusy = false;
+                            }
                         }
-
-                        Item { Layout.fillWidth: true }
                     }
 
-                    Label { text: "Results"; font.bold: true; opacity: 0.8 }
-
-                    Rectangle {
+                    Item {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        border.color: Qt.rgba(0.6, 0.6, 0.6, 1)
-                        color: "transparent"
 
                         ListView {
                             id: resultsList
@@ -592,37 +677,28 @@ KCM.SimpleKCM {
                             clip: true
                             model: root.searchResults
                             currentIndex: searchPanel.selectedIndex
+                            visible: root.searchResults.length > 0
+                            ScrollBar.vertical: ScrollBar {
+                                policy: ScrollBar.AsNeeded
+                                active: resultsList.moving || hovered
+                            }
 
                             delegate: Rectangle {
                                 required property var modelData
                                 required property int index
 
                                 width: ListView.view.width
-                                height: 44
+                                height: 36
                                 color: index === searchPanel.selectedIndex ? Kirigami.Theme.highlightColor : "transparent"
 
-                                Column {
+                                Label {
                                     anchors.fill: parent
                                     anchors.leftMargin: 8
                                     anchors.rightMargin: 8
-                                    anchors.topMargin: 4
-                                    spacing: 1
-
-                                    Label {
-                                        width: parent.width
-                                        text: root.formatResultTitle(modelData)
-                                        color: index === searchPanel.selectedIndex ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
-                                        elide: Text.ElideRight
-                                    }
-                                    Label {
-                                        width: parent.width
-                                        font.pixelSize: 10
-                                        opacity: 0.75
-                                        text: "[" + (modelData.provider ? modelData.provider : "Unknown") + "] "
-                                            + Number(modelData.latitude).toFixed(5) + ", " + Number(modelData.longitude).toFixed(5)
-                                        color: index === searchPanel.selectedIndex ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
-                                        elide: Text.ElideRight
-                                    }
+                                    verticalAlignment: Text.AlignVCenter
+                                    text: root.formatResultListItem(modelData)
+                                    color: index === searchPanel.selectedIndex ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                                    elide: Text.ElideRight
                                 }
 
                                 MouseArea {
@@ -631,22 +707,55 @@ KCM.SimpleKCM {
                                         searchPanel.selectedIndex = index;
                                         searchPanel.selectedResult = modelData;
                                         resultsList.currentIndex = index;
+                                        root.applySearchResult(modelData);
                                     }
                                     onDoubleClicked: {
                                         searchPanel.selectedIndex = index;
                                         searchPanel.selectedResult = modelData;
+                                        resultsList.currentIndex = index;
                                         root.applySearchResult(modelData);
-                                        root.closeSearchPage();
                                     }
                                 }
                             }
                         }
-                    }
 
-                    Label {
-                        Layout.alignment: Qt.AlignRight
-                        text: "Double-click a result to apply and return"
-                        opacity: 0.72
+                        Column {
+                            anchors.centerIn: parent
+                            width: parent.width - 32
+                            spacing: 10
+                            visible: root.searchBusy || root.searchResults.length === 0
+
+                            BusyIndicator {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                running: root.searchBusy
+                                visible: root.searchBusy
+                            }
+
+                            Label {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: root.searchBusy
+                                    ? "Loading locations…"
+                                    : (searchField.text.trim().length < 2
+                                        ? "Search a weather station to set your location"
+                                        : "No weather stations found for '" + searchField.text.trim() + "'")
+                                font.pixelSize: root.searchBusy ? 18 : 30
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                                width: parent.width
+                                wrapMode: Text.WordWrap
+                                opacity: 0.9
+                            }
+
+                            Label {
+                                visible: !root.searchBusy && searchField.text.trim().length >= 2
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: "If you've used this weather station in the past, it's possible that a server outage at the weather station provider has made it temporarily unavailable. Try again later."
+                                width: parent.width
+                                horizontalAlignment: Text.AlignHCenter
+                                wrapMode: Text.WordWrap
+                                opacity: 0.82
+                            }
+                        }
                     }
                 }
             }

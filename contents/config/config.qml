@@ -3,14 +3,14 @@ import org.kde.plasma.configuration
 
 ConfigModel {
     ConfigCategory {
-        name: qsTr("General")
-        icon: "settings-configure"
-        source: "configGeneral.qml"
-    }
-    ConfigCategory {
         name: qsTr("Location")
         icon: "mark-location"
         source: "configLocation.qml"
+    }
+    ConfigCategory {
+        name: qsTr("General")
+        icon: "settings-configure"
+        source: "configGeneral.qml"
     }
     ConfigCategory {
         name: qsTr("Units")
