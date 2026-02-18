@@ -33,6 +33,16 @@
         <entry name="scrollboxItems" type="String"><default>Humidity;Wind;Pressure;Dew Point;Visibility</default></entry>
         <entry name="animateTransitions" type="Bool"><default>true</default></entry>
 
+        <entry name="panelInfoMode" type="String"><default>scroll</default></entry>
+        <entry name="panelScrollSeconds" type="Int"><default>4</default><min>1</min><max>30</max></entry>
+        <entry name="panelShowTemperature" type="Bool"><default>true</default></entry>
+        <entry name="panelShowWeatherIcon" type="Bool"><default>true</default></entry>
+        <entry name="panelShowSunTimes" type="Bool"><default>true</default></entry>
+        <entry name="panelShowWind" type="Bool"><default>true</default></entry>
+        <entry name="panelShowFeelsLike" type="Bool"><default>false</default></entry>
+        <entry name="panelShowHumidity" type="Bool"><default>false</default></entry>
+        <entry name="panelShowPressure" type="Bool"><default>false</default></entry>
+
         <entry name="refreshIntervalMinutes" type="Int"><default>15</default><min>5</min><max>180</max></entry>
         <entry name="autoRefresh" type="Bool"><default>true</default></entry>
     </group>
