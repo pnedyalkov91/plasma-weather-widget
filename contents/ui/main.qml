@@ -51,9 +51,10 @@ PlasmoidItem {
         implicitWidth: 320
         implicitHeight: Math.max(22, Kirigami.Units.gridUnit + 4)
 
-        TapHandler {
+        MouseArea {
+            anchors.fill: parent
             acceptedButtons: Qt.LeftButton
-            onTapped: root.openPopupFromPanel()
+            onClicked: root.openPopupFromPanel()
         }
 
         RowLayout {
