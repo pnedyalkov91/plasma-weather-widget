@@ -34,8 +34,6 @@ PlasmoidItem {
 
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
 
-    onActivated: root.openPopupFromPanel()
-
     function openLocationSettings() {
         var action = Plasmoid.internalAction("configure");
         if (action) {
