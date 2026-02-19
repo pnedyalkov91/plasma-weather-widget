@@ -34,7 +34,7 @@ PlasmoidItem {
 
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
 
-    onActivated: Plasmoid.expanded = !Plasmoid.expanded
+    onActivated: root.openPopupFromPanel()
 
     function openLocationSettings() {
         var action = Plasmoid.internalAction("configure");
@@ -43,9 +43,20 @@ PlasmoidItem {
         }
     }
 
+    function openPopupFromPanel() {
+        if (!Plasmoid.expanded) {
+            Plasmoid.expanded = true;
+        }
+    }
+
     compactRepresentation: Item {
         implicitWidth: 320
         implicitHeight: Math.max(22, Kirigami.Units.gridUnit + 4)
+
+        TapHandler {
+            acceptedButtons: Qt.LeftButton
+            onTapped: root.openPopupFromPanel()
+        }
 
         RowLayout {
             anchors.fill: parent
