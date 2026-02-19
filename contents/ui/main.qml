@@ -45,6 +45,16 @@ PlasmoidItem {
         implicitWidth: 320
         implicitHeight: Math.max(22, Kirigami.Units.gridUnit + 4)
 
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton
+            preventStealing: true
+            onClicked: {
+                root.expanded = true;
+                Plasmoid.expanded = true;
+            }
+        }
+
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: 4
