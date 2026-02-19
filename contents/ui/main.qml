@@ -33,6 +33,8 @@ PlasmoidItem {
     readonly property string bundledWeatherApiKey: "601ba4ac57404ec29ff120510261802"
 
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
+    Plasmoid.toolTipMainText: hasSelectedTown ? Plasmoid.configuration.locationName : "City List Weather"
+    Plasmoid.toolTipSubText: tooltipDetails()
 
     function openLocationSettings() {
         var action = Plasmoid.internalAction("configure");
@@ -162,6 +164,18 @@ PlasmoidItem {
         if (Plasmoid.configuration.pressureUnit === "mmHg") return (hpa * 0.750062).toFixed(0) + " mmHg";
         if (Plasmoid.configuration.pressureUnit === "inHg") return (hpa * 0.02953).toFixed(2) + " inHg";
         return Math.round(hpa) + " hPa";
+    }
+
+    function tooltipDetails() {
+        if (!hasSelectedTown) {
+            return "Click to choose a location";
+        }
+        return "Wind: " + windValue(windKmh)
+            + "\nFeels like: " + tempValue(apparentC)
+            + "\nHumidity: " + (isNaN(humidityPercent) ? "--" : Math.round(humidityPercent) + "%")
+            + "\nPressure: " + pressureValue(pressureHpa)
+            + "\nSunrise: " + sunriseTimeText
+            + "\nSunset: " + sunsetTimeText;
     }
 
     function formatUnixClock(seconds) {
@@ -635,11 +649,26 @@ PlasmoidItem {
 
                                     Column {
                                         spacing: 3
-                                        Label { text: "Wind: " + windValue(windKmh); color: "white" }
-                                        Label { text: "Feels like: " + tempValue(apparentC); color: "white" }
-                                        Label { text: "Humidity: " + (isNaN(humidityPercent) ? "--" : Math.round(humidityPercent) + "%"); color: "white" }
-                                        Label { text: "Pressure: " + pressureValue(pressureHpa); color: "white" }
+                                        Label { text: "🧭  " + windValue(windKmh); color: "white" }
+                                        Label { text: "🌡  Feels: " + tempValue(apparentC); color: "white" }
+                                        Label { text: "💧  " + (isNaN(humidityPercent) ? "--" : Math.round(humidityPercent) + "%"); color: "white" }
+                                        Label { text: "🧪  " + pressureValue(pressureHpa); color: "white" }
+                                        Label { text: "🌅  " + sunriseTimeText; color: "white" }
+                                        Label { text: "🌇  " + sunsetTimeText; color: "white" }
                                     }
+                                }
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 28
+                                radius: 4
+                                color: Qt.rgba(1, 1, 1, 0.10)
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: Math.max(1, dailyData.length) + " Days"
+                                    color: "white"
+                                    font.bold: true
                                 }
                             }
 
