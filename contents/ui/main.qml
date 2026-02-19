@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import org.kde.plasma.plasmoid
+import org.kde.plasma.core as PlasmaCore
 import org.kde.kirigami as Kirigami
 
 PlasmoidItem {
@@ -9,6 +10,8 @@ PlasmoidItem {
 
     implicitWidth: 520
     implicitHeight: 280
+    switchWidth: 520
+    switchHeight: 280
 
     property bool loading: false
     property real temperatureC: NaN
@@ -18,19 +21,70 @@ PlasmoidItem {
     property real humidityPercent: NaN
     property real visibilityKm: NaN
     property real dewPointC: NaN
+    property string sunriseTimeText: "--"
+    property string sunsetTimeText: "--"
     property int weatherCode: -1
     property var dailyData: []
     property int scrollIndex: 0
+    property int panelScrollIndex: 0
     property string updateText: ""
     readonly property bool hasSelectedTown: (Plasmoid.configuration.locationName || "").trim().length > 0
     readonly property string bundledOpenWeatherApiKey: "8003225e8825db83758c237068447229"
     readonly property string bundledWeatherApiKey: "601ba4ac57404ec29ff120510261802"
+
+    Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
+    Plasmoid.toolTipMainText: hasSelectedTown ? Plasmoid.configuration.locationName : "City List Weather"
+    Plasmoid.toolTipSubText: tooltipDetails()
 
     function openLocationSettings() {
         var action = Plasmoid.internalAction("configure");
         if (action) {
             action.trigger();
         }
+    }
+
+    compactRepresentation: Item {
+        implicitWidth: 320
+        implicitHeight: Math.max(22, Kirigami.Units.gridUnit + 4)
+
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton
+            preventStealing: true
+            onClicked: {
+                root.expanded = true;
+                Plasmoid.expanded = true;
+            }
+        }
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 4
+            anchors.rightMargin: 4
+            spacing: 6
+
+            Kirigami.Icon {
+                visible: !hasSelectedTown || Plasmoid.configuration.panelShowWeatherIcon
+                source: weatherCodeToIcon(weatherCode)
+                Layout.preferredWidth: Math.max(14, parent.height - 6)
+                Layout.preferredHeight: Math.max(14, parent.height - 6)
+            }
+
+            Label {
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+                color: Kirigami.Theme.textColor
+                text: {
+                    if (!hasSelectedTown) {
+                        return "";
+                    }
+                    var city = (Plasmoid.configuration.locationName || "").split(",")[0].trim();
+                    var info = root.panelLineText();
+                    return city + (info.length > 0 ? ", " + info : "");
+                }
+            }
+        }
+
     }
 
     function weatherCodeToText(code) {
@@ -45,6 +99,7 @@ PlasmoidItem {
     }
 
     function weatherCodeToIcon(code) {
+        if (code < 0) return "weather-none-available";
         if (code === 0) return "weather-clear";
         if (code === 1 || code === 2) return "weather-few-clouds";
         if (code === 3) return "weather-overcast";
@@ -111,6 +166,46 @@ PlasmoidItem {
         return Math.round(hpa) + " hPa";
     }
 
+    function tooltipDetails() {
+        if (!hasSelectedTown) {
+            return "Click to choose a location";
+        }
+        return "Wind: " + windValue(windKmh)
+            + "\nFeels like: " + tempValue(apparentC)
+            + "\nHumidity: " + (isNaN(humidityPercent) ? "--" : Math.round(humidityPercent) + "%")
+            + "\nPressure: " + pressureValue(pressureHpa)
+            + "\nSunrise: " + sunriseTimeText
+            + "\nSunset: " + sunsetTimeText;
+    }
+
+    function formatUnixClock(seconds) {
+        if (!seconds || isNaN(seconds)) return "--";
+        return Qt.formatTime(new Date(seconds * 1000), "HH:mm");
+    }
+
+    function panelInfoItems() {
+        var items = [];
+        if (Plasmoid.configuration.panelShowTemperature) items.push("Temp " + tempValue(temperatureC));
+        if (Plasmoid.configuration.panelShowSunTimes) items.push("☀ " + sunriseTimeText + " / " + sunsetTimeText);
+        if (Plasmoid.configuration.panelShowWind) items.push("Wind " + windValue(windKmh));
+        if (Plasmoid.configuration.panelShowFeelsLike) items.push("Feels " + tempValue(apparentC));
+        if (Plasmoid.configuration.panelShowHumidity) items.push("Humidity " + (isNaN(humidityPercent) ? "--" : Math.round(humidityPercent) + "%"));
+        if (Plasmoid.configuration.panelShowPressure) items.push("Pressure " + pressureValue(pressureHpa));
+        return items;
+    }
+
+    function panelLineText() {
+        var items = panelInfoItems();
+        if (items.length === 0) {
+            return "";
+        }
+        if (Plasmoid.configuration.panelInfoMode === "single") {
+            return items.join(" • ");
+        }
+        var index = panelScrollIndex % items.length;
+        return items[index];
+    }
+
     function refreshNow() {
         if (!hasSelectedTown) {
             loading = false;
@@ -122,6 +217,8 @@ PlasmoidItem {
             humidityPercent = NaN;
             visibilityKm = NaN;
             dewPointC = NaN;
+            sunriseTimeText = "--";
+            sunsetTimeText = "--";
             weatherCode = -1;
             dailyData = [];
             return;
@@ -173,6 +270,8 @@ PlasmoidItem {
                     dewPointC = NaN;
                     visibilityKm = data.visibility !== undefined ? (data.visibility / 1000.0) : NaN;
                     weatherCode = (data.weather && data.weather.length > 0) ? openWeatherCodeToWmo(data.weather[0].id) : 2;
+                    sunriseTimeText = data.sys && data.sys.sunrise ? formatUnixClock(data.sys.sunrise) : "--";
+                    sunsetTimeText = data.sys && data.sys.sunset ? formatUnixClock(data.sys.sunset) : "--";
                     dailyData = [];
                     loading = false;
                     updateText = "Updated " + Qt.formatTime(new Date(), "HH:mm") + " (OpenWeather)";
@@ -211,6 +310,15 @@ PlasmoidItem {
                     dewPointC = NaN;
                     visibilityKm = data.current.vis_km;
                     weatherCode = data.current.condition ? weatherApiCodeToWmo(data.current.condition.code) : 2;
+                    if (data.forecast && data.forecast.forecastday && data.forecast.forecastday.length > 0) {
+                        sunriseTimeText = data.forecast.forecastday[0].astro && data.forecast.forecastday[0].astro.sunrise
+                            ? data.forecast.forecastday[0].astro.sunrise : "--";
+                        sunsetTimeText = data.forecast.forecastday[0].astro && data.forecast.forecastday[0].astro.sunset
+                            ? data.forecast.forecastday[0].astro.sunset : "--";
+                    } else {
+                        sunriseTimeText = "--";
+                        sunsetTimeText = "--";
+                    }
 
                     dailyData = [];
                     if (data.forecast && data.forecast.forecastday) {
@@ -274,6 +382,8 @@ PlasmoidItem {
                         ? ts.data.next_1_hours.summary.symbol_code
                         : "";
                     weatherCode = metNoSymbolToWmo(symbol);
+                    sunriseTimeText = "--";
+                    sunsetTimeText = "--";
                     dailyData = [];
                     loading = false;
                     updateText = "Updated " + Qt.formatTime(new Date(), "HH:mm") + " (met.no)";
@@ -290,7 +400,7 @@ PlasmoidItem {
                 + "&longitude=" + Plasmoid.configuration.longitude
                 + "&timezone=" + encodeURIComponent(timezoneValue.length > 0 ? timezoneValue : "auto")
                 + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,surface_pressure,dew_point_2m,visibility"
-                + "&daily=weather_code,temperature_2m_max,temperature_2m_min";
+                + "&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset";
 
             request.onreadystatechange = function() {
                 if (request.readyState !== XMLHttpRequest.DONE) return;
@@ -313,6 +423,10 @@ PlasmoidItem {
                 dewPointC = data.current.dew_point_2m;
                 visibilityKm = data.current.visibility / 1000.0;
                 weatherCode = data.current.weather_code;
+                sunriseTimeText = data.daily && data.daily.sunrise && data.daily.sunrise.length > 0
+                    ? Qt.formatTime(new Date(data.daily.sunrise[0]), "HH:mm") : "--";
+                sunsetTimeText = data.daily && data.daily.sunset && data.daily.sunset.length > 0
+                    ? Qt.formatTime(new Date(data.daily.sunset[0]), "HH:mm") : "--";
 
                 dailyData = [];
                 if (data.daily && data.daily.time) {
@@ -374,21 +488,36 @@ PlasmoidItem {
     }
 
     Timer {
+        interval: Math.max(1, Plasmoid.configuration.panelScrollSeconds) * 1000
+        running: Plasmoid.configuration.panelInfoMode === "scroll"
+        repeat: true
+        onTriggered: {
+            panelScrollIndex += 1;
+        }
+    }
+
+    Timer {
         interval: 3000
         running: Plasmoid.configuration.showScrollbox && Plasmoid.configuration.animateTransitions
         repeat: true
         onTriggered: {
             var lines = scrollLines();
-            scrollIndex = lines.length === 0 ? 0 : (scrollIndex + 1) % lines.length;
+            if (lines.length > 0) {
+                scrollIndex = (scrollIndex + 1) % lines.length;
+            }
         }
     }
 
-    Rectangle {
+    fullRepresentation: Rectangle {
+        implicitWidth: 520
+        implicitHeight: 280
         anchors.fill: parent
         radius: 4
-        color: Qt.rgba(0.22, 0.16, 0.10, Math.max(0.2, Math.min(1, Plasmoid.configuration.panelOpacityPercent / 100)))
-        border.color: Qt.rgba(0.80, 0.72, 0.58, 0.9)
-        border.width: 1
+        color: Plasmoid.configuration.transparentBackground
+            ? "transparent"
+            : Qt.rgba(0.22, 0.16, 0.10, Math.max(0.0, Math.min(1, Plasmoid.configuration.panelOpacityPercent / 100)))
+        border.color: Plasmoid.configuration.transparentBackground ? "transparent" : Qt.rgba(0.80, 0.72, 0.58, 0.9)
+        border.width: Plasmoid.configuration.transparentBackground ? 0 : 1
 
         ColumnLayout {
             anchors.fill: parent
@@ -520,11 +649,26 @@ PlasmoidItem {
 
                                     Column {
                                         spacing: 3
-                                        Label { text: "Wind: " + windValue(windKmh); color: "white" }
-                                        Label { text: "Feels like: " + tempValue(apparentC); color: "white" }
-                                        Label { text: "Humidity: " + (isNaN(humidityPercent) ? "--" : Math.round(humidityPercent) + "%"); color: "white" }
-                                        Label { text: "Pressure: " + pressureValue(pressureHpa); color: "white" }
+                                        Label { text: "🧭  " + windValue(windKmh); color: "white" }
+                                        Label { text: "🌡  Feels: " + tempValue(apparentC); color: "white" }
+                                        Label { text: "💧  " + (isNaN(humidityPercent) ? "--" : Math.round(humidityPercent) + "%"); color: "white" }
+                                        Label { text: "🧪  " + pressureValue(pressureHpa); color: "white" }
+                                        Label { text: "🌅  " + sunriseTimeText; color: "white" }
+                                        Label { text: "🌇  " + sunsetTimeText; color: "white" }
                                     }
+                                }
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 28
+                                radius: 4
+                                color: Qt.rgba(1, 1, 1, 0.10)
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: Math.max(1, dailyData.length) + " Days"
+                                    color: "white"
+                                    font.bold: true
                                 }
                             }
 

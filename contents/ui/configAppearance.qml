@@ -14,6 +14,7 @@ KCM.SimpleKCM {
     property bool cfg_autoRefresh: true
     property int cfg_refreshIntervalMinutes: 15
     property int cfg_panelOpacityPercent: 70
+    property bool cfg_transparentBackground: false
 
     function setCombo(combo, value) {
         for (var i = 0; i < combo.model.length; ++i) {
@@ -69,13 +70,21 @@ KCM.SimpleKCM {
         RowLayout {
             Slider {
                 Layout.preferredWidth: 180
-                from: 20
+                from: 0
                 to: 100
                 value: root.cfg_panelOpacityPercent
                 stepSize: 1
                 onMoved: root.cfg_panelOpacityPercent = Math.round(value)
+                enabled: !root.cfg_transparentBackground
             }
-            Label { text: root.cfg_panelOpacityPercent + "%" }
+            Label { text: root.cfg_transparentBackground ? "Auto" : (root.cfg_panelOpacityPercent + "%") }
+        }
+
+        CheckBox {
+            Layout.columnSpan: 2
+            text: "Transparent widget background"
+            checked: root.cfg_transparentBackground
+            onToggled: root.cfg_transparentBackground = checked
         }
 
         CheckBox {
