@@ -34,6 +34,8 @@ PlasmoidItem {
 
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
 
+    onActivated: Plasmoid.expanded = !Plasmoid.expanded
+
     function openLocationSettings() {
         var action = Plasmoid.internalAction("configure");
         if (action) {
@@ -73,11 +75,6 @@ PlasmoidItem {
             }
         }
 
-        MouseArea {
-            anchors.fill: parent
-            acceptedButtons: Qt.LeftButton
-            onClicked: Plasmoid.expanded = true
-        }
     }
 
     function weatherCodeToText(code) {
@@ -490,6 +487,8 @@ PlasmoidItem {
     }
 
     fullRepresentation: Rectangle {
+        implicitWidth: 520
+        implicitHeight: 280
         anchors.fill: parent
         radius: 4
         color: Plasmoid.configuration.transparentBackground
