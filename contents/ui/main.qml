@@ -41,21 +41,9 @@ PlasmoidItem {
         }
     }
 
-    function openPopupFromPanel() {
-        if (!root.expanded) {
-            root.expanded = true;
-        }
-    }
-
     compactRepresentation: Item {
         implicitWidth: 320
         implicitHeight: Math.max(22, Kirigami.Units.gridUnit + 4)
-
-        MouseArea {
-            anchors.fill: parent
-            acceptedButtons: Qt.LeftButton
-            onClicked: root.openPopupFromPanel()
-        }
 
         RowLayout {
             anchors.fill: parent
