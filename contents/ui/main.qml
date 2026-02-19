@@ -42,8 +42,8 @@ PlasmoidItem {
     }
 
     function openPopupFromPanel() {
-        if (!Plasmoid.expanded) {
-            Plasmoid.expanded = true;
+        if (!root.expanded) {
+            root.expanded = true;
         }
     }
 
